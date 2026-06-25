@@ -1,0 +1,96 @@
+---
+description: Lance tout le projet (lobby + vite + tunnel HTTPS) pour jouer depuis un téléphone, et renvoie l'URL à taper.
+allowed-tools: Bash, PowerShell, Read, Edit
+---
+
+# Lancer le projet sur téléphone 📱
+
+Quand l'utilisateur tape `/launchTel`, démarre toute la stack pour qu'il puisse
+jouer depuis son téléphone (caméra incluse), et donne-lui **une seule URL HTTPS**
+à ouvrir. Suis ces étapes dans l'ordre, sans poser de question — fais tout toi-même.
+
+## Pré-requis (vérifie en silence)
+- `cloudflared` doit être dans le PATH (`which cloudflared`). S'il manque, dis-le
+  clairement et stoppe.
+- Le port vite utilisé ici est **5180** (fixe), le serveur de lobby **8080**.
+- `vite.config.js` doit déjà contenir `host: true`, `allowedHosts: true` et le
+  proxy `'/ws' -> ws://localhost:8080`. Si ce n'est pas le cas, ajoute-le avant de
+  lancer (sinon le tunnel et le multijoueur ne marcheront pas).
+
+## 1. Nettoyer les anciennes instances
+Tue ce qui écoute déjà sur 5180 et 8080, et les éventuels tunnels cloudflared
+restés ouverts, pour repartir propre (PowerShell) :
+```
+foreach ($port in 5180,8080) {
+  $pids = (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue).OwningProcess
+  if ($pids) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }
+}
+Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+```
+
+## 2. Démarrer le serveur de lobby (WebSocket, port 8080)
+Lance en arrière-plan (`run_in_background: true`), depuis le dossier du projet :
+```
+npm run server
+```
+Attends de voir « Serveur de lobby en écoute sur ws://localhost:8080 » dans son log.
+
+## 3. Démarrer Vite (port fixe 5180)
+Lance en arrière-plan (`run_in_background: true`) :
+```
+npm run dev -- --port 5180 --strictPort
+```
+Attends que le log affiche « ready » / « Local: http://localhost:5180/ », puis
+vérifie : `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5180/` doit
+renvoyer `200`.
+
+## 4. Démarrer le tunnel HTTPS public (cloudflared)
+Lance en arrière-plan (`run_in_background: true`) :
+```
+cloudflared tunnel --url http://localhost:5180 --no-autoupdate
+```
+Attends ~6-8 s, puis extrais l'URL publique depuis le fichier de log du process :
+```
+grep -oE "https://[a-z0-9-]+\.trycloudflare\.com" <fichier_log_cloudflared> | head -1
+```
+
+## 5. Vérifier que tout passe par le tunnel
+Avec l'URL trouvée (note `$URL`), vérifie 3 routes (toutes doivent renvoyer 200) :
+- `$URL/`               (le lobby)
+- `$URL/colorhunt.html` (le jeu Color Hunt en solo)
+- `$URL/src/colorhunt/main.js` (un module, prouve que vite sert bien les sources)
+
+Puis teste le WebSocket **à travers le tunnel** avec un petit client. Écris un
+fichier temporaire `_wstest.mjs` **dans le dossier du projet** (pour qu'il trouve
+le module `ws` des node_modules), exécute-le, puis supprime-le :
+```js
+import WebSocket from 'ws';
+const ws = new WebSocket(process.argv[2]);
+const t = setTimeout(() => { console.log('TIMEOUT'); process.exit(1); }, 8000);
+ws.on('open', () => ws.send(JSON.stringify({ type: 'create', name: 'TestPhone' })));
+ws.on('message', (d) => { const m = JSON.parse(d.toString());
+  if (m.type === 'created') { console.log('OK code =', m.code); clearTimeout(t); ws.close(); process.exit(0); } });
+ws.on('error', (e) => { console.log('ERROR', e.message); process.exit(1); });
+```
+Lance-le sur `wss://<host-du-tunnel>/ws`. Si ça affiche « OK code = … », le
+multijoueur fonctionne depuis le téléphone.
+
+## 6. Donner le résultat à l'utilisateur
+Termine par un message court et clair façon :
+
+> 📱 **Ouvre cette URL sur ton téléphone :**
+> ### 👉 `<URL>/`
+> (Color Hunt seul : `<URL>/colorhunt.html`)
+>
+> Tout est en marche (lobby 8080 ✅ · vite 5180 ✅ · tunnel ✅).
+> Laisse cette session Claude Code ouverte pendant que vous jouez.
+> ⚠️ L'URL change à chaque relance — relance `/launchTel` pour en regénérer une.
+
+## Notes
+- Si un port est déjà occupé, c'est qu'une instance tourne encore : l'étape 1
+  doit l'avoir tuée ; si `--strictPort` échoue quand même, retue le process sur
+  5180 puis relance vite.
+- Ne lance jamais ces process au premier plan (ça bloquerait la session) :
+  toujours `run_in_background: true`.
+- Si l'utilisateur veut un QR code de l'URL, propose-le mais ne le fais que s'il
+  le demande.

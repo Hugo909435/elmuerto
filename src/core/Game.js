@@ -13,6 +13,7 @@ import { AudioSystem } from '../systems/AudioSystem.js';
 import { Ball } from '../gameplay/Ball.js';
 import { AimController } from '../gameplay/AimController.js';
 import { LevelBuilder } from '../level/LevelBuilder.js';
+import { CameraRig } from '../systems/CameraRig.js';
 import { UI } from '../ui/UI.js';
 
 export class Game {
@@ -35,17 +36,16 @@ export class Game {
     // --- Scene ---
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(COLORS.SKY);
-    this.scene.fog = new THREE.Fog(COLORS.SKY, 45, 90);
+    this.scene.fog = new THREE.Fog(COLORS.SKY, 90, 300);
 
-    // --- Camera ---
+    // --- Camera (driven by a follow rig) ---
     this.camera = new THREE.PerspectiveCamera(
       CAMERA.FOV,
       window.innerWidth / window.innerHeight,
       CAMERA.NEAR,
       CAMERA.FAR,
     );
-    this.camera.position.set(CAMERA.OFFSET.x, CAMERA.OFFSET.y, CAMERA.OFFSET.z);
-    this.camera.lookAt(CAMERA.LOOK_AT.x, CAMERA.LOOK_AT.y, CAMERA.LOOK_AT.z);
+    this.cameraRig = new CameraRig(this.camera);
 
     // --- Lights ---
     const ambient = new THREE.AmbientLight(0xffffff, 0.75);
@@ -120,9 +120,12 @@ export class Game {
 
   _loadHole() {
     const hole = GameState.currentHole;
-    const { bounds, obstacles } = this.level.build(hole);
-    this.ball.setPosition(hole.start.x, hole.start.z);
-    this.physics.configure({ ball: this.ball, bounds, obstacles, cup: hole.cup });
+    const { bounds, obstacles, platforms } = this.level.build(hole);
+    this.physics.configure({ ball: this.ball, bounds, obstacles, platforms, cup: hole.cup });
+    // Place the ball on whatever floor is under the start (e.g. the bridge).
+    const startY = this.physics.groundHeight(hole.start.x, hole.start.z, Infinity);
+    this.ball.setPosition(hole.start.x, hole.start.z, startY);
+    this.cameraRig.snapTo(this.ball.position);
     GameState.startHole();
     EventBus.emit(Events.HOLE_LOADED);
   }
@@ -135,6 +138,8 @@ export class Game {
     this.aim.update(dt);
     this.physics.update(dt);
     this.ball.rollVisual(dt, this.physics.velocity);
+    this.ball.syncShadow();
+    this.cameraRig.update(dt, this.ball.position);
     this.level.update(t);
 
     // Drive the sink animation; once finished, reveal the win overlay.

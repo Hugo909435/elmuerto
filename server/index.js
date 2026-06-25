@@ -28,6 +28,7 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans I,O,0,1 ambigu
 const GAMES = [
   { id: 'minigolf', label: 'Mini Golf', emoji: '⛳', url: 'minigolf.html' },
   { id: 'racing', label: 'Course', emoji: '🏎️', url: 'racing.html' },
+  { id: 'colorhunt', label: 'Color Hunt', emoji: '🎨', url: 'colorhunt.html' },
 ];
 
 // Construit les segments de la roue : on répète les jeux pour une roue

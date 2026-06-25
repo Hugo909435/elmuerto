@@ -17,6 +17,19 @@ export class Ball {
     this.mesh.castShadow = false;
     scene.add(this.mesh);
 
+    // Fake drop shadow: a flat disc on the turf, directly under the ball. It
+    // shrinks and fades as the ball climbs, so the player can read its height.
+    const shGeo = new THREE.CircleGeometry(BALL.RADIUS * 1.15, 20);
+    shGeo.rotateX(-Math.PI / 2);
+    this._shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.3,
+      depthWrite: false,
+    });
+    this.shadow = new THREE.Mesh(shGeo, this._shadowMat);
+    scene.add(this.shadow);
+
     this._sinking = null; // active sink animation state
   }
 
@@ -24,10 +37,22 @@ export class Ball {
     return this.mesh.position;
   }
 
-  setPosition(x, z) {
-    this.mesh.position.set(x, BALL.RADIUS, z);
+  setPosition(x, z, groundY = 0) {
+    this.mesh.position.set(x, groundY + BALL.RADIUS, z);
     this.mesh.visible = true;
     this._sinking = null;
+  }
+
+  // Keep the drop shadow under the ball, scaled by its height off the turf.
+  syncShadow() {
+    const p = this.mesh.position;
+    this.shadow.visible = this.mesh.visible;
+    if (!this.mesh.visible) return;
+    this.shadow.position.set(p.x, 0.015, p.z);
+    const height = Math.max(0, p.y - BALL.RADIUS);
+    const s = Math.max(0.4, 1 - height * 0.05);
+    this.shadow.scale.setScalar(s);
+    this._shadowMat.opacity = 0.3 * s;
   }
 
   // Roll-look: spin the ball based on how far it travelled this frame.
@@ -73,7 +98,10 @@ export class Ball {
 
   dispose() {
     this.scene.remove(this.mesh);
+    this.scene.remove(this.shadow);
     this.geometry.dispose();
     this.material.dispose();
+    this.shadow.geometry.dispose();
+    this._shadowMat.dispose();
   }
 }

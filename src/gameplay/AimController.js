@@ -176,7 +176,7 @@ export class AimController {
     const angle = Math.atan2(this.dir.x, this.dir.z);
     this.group.rotation.y = angle;
 
-    const maxLen = 6;
+    const maxLen = 10;
     const len = 1 + this.power * maxLen;
     this.shaft.scale.set(1, 1, len - 0.8);
     this.head.position.set(0, 0, len - 0.45);

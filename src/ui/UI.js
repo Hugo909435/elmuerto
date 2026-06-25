@@ -29,7 +29,10 @@ export class UI {
     );
     this.$('next-btn').addEventListener('click', () => {
       this._hide(this.winOverlay);
-      EventBus.emit('ui:next');
+      // Single-level course: the only hole is always the last one, so the
+      // win button restarts the game instead of advancing to a next hole.
+      if (GameState.isLastHole) EventBus.emit(Events.GAME_RESET);
+      else EventBus.emit('ui:next');
     });
     this.$('restart-btn').addEventListener('click', () => {
       this._hide(this.endOverlay);
@@ -77,7 +80,7 @@ export class UI {
     this.$('win-title').textContent = strokes === 1 ? '🎯 Hole in one !' : '🏆 Dans le trou !';
     this.$('win-score').textContent = this._scoreLabel(strokes, par);
     this.$('win-detail').textContent = `${strokes} coup${strokes > 1 ? 's' : ''} (par ${par})`;
-    this.$('next-btn').textContent = isLast ? 'Voir le score' : 'Trou suivant';
+    this.$('next-btn').textContent = isLast ? 'Rejouer' : 'Trou suivant';
     this._show(this.winOverlay);
   }
 

@@ -17,17 +17,32 @@ export const SAFE_ZONE = {
 };
 
 export const WORLD = {
-  GRAVITY: -20, // used only for the sinking animation
+  GRAVITY: -32, // m/s² — drives the ball's flight through the air
   GROUND_Y: 0,
 };
 
 export const BALL = {
   RADIUS: 0.35,
-  // Exponential ground damping: speed retained per second (rolling friction).
-  FRICTION: 0.12, // fraction of speed kept after 1s (lower = stops faster)
-  STOP_SPEED: 0.35, // below this the ball is considered stopped
-  MAX_LAUNCH_SPEED: 26, // speed at full power
-  WALL_RESTITUTION: 0.7, // energy kept after a wall bounce
+  // Exponential damping: fraction of horizontal speed kept after 1s.
+  FRICTION: 0.2, // rolling friction on the ground (lower = stops faster)
+  AIR_DRAG: 0.6, // gentle drag while airborne
+  STOP_SPEED: 0.4, // below this (on the ground) the ball is considered stopped
+  MAX_LAUNCH_SPEED: 52, // horizontal speed at full power (long course)
+  WALL_RESTITUTION: 0.6, // horizontal energy kept after a wall bounce
+  BOUNCE_RESTITUTION: 0.5, // vertical energy kept when the ball lands
+};
+
+// Auto-arc launch: low power rolls flat, higher power lofts the ball higher.
+export const SHOT = {
+  LOFT_START: 0.25, // below this power the shot stays on the ground
+  MAX_LAUNCH_VY: 19, // upward launch speed at full power
+};
+
+// Corridor walls are tall enough to keep the ball on the fairway; a very
+// powerful arc can still fly over them to cut the dogleg corner.
+export const WALL = {
+  THICKNESS: 1,
+  HEIGHT: 2.2,
 };
 
 export const AIM = {
@@ -46,10 +61,12 @@ export const HOLE = {
 export const CAMERA = {
   FOV: 55,
   NEAR: 0.1,
-  FAR: 200,
-  // Offset from the course center, looking down at an angle.
-  OFFSET: { x: 0, y: 24, z: 18 },
-  LOOK_AT: { x: 0, y: 0, z: -2 },
+  FAR: 400,
+  // Third-person follow: offset added to the ball position each frame.
+  // High + pulled back so the whole bending fairway reads clearly.
+  FOLLOW: { x: 0, y: 30, z: 24 },
+  SMOOTH: 3.2, // higher = snappier follow (exponential easing rate)
+  LOOK_AHEAD: 3, // look slightly past the ball toward the hole (z-)
 };
 
 export const COLORS = {
@@ -67,30 +84,41 @@ export const COLORS = {
   OBSTACLE: 0x3a3f47,
 };
 
-// Each hole: green size, ball start, cup position, optional box obstacles, par.
+// The course. A single long TWO-LEVEL hole.
+//   • The HIGH route is a straight elevated bridge (y = UPPER) running from the
+//     start almost to the cup: stay on it and you reach the hole fast.
+//   • Fall off the narrow bridge and you drop to the LOW floor (y = 0), a long
+//     zigzag the bridge flies over — you still reach the cup, but the long way.
+//
+//   • tiles — grass rectangles (center x,z + size w,d + floor height y).
+//   • walls — boxes (center x,z + size w,d + height h). Tall outer walls contain
+//     everything; low inner walls (h below the bridge) only block the low floor.
+// Overall extent: x −24..24, z −46..46 (≈48 × 92 units).
+const UPPER = 3.5; // bridge height
 export const COURSE = [
   {
-    size: { w: 16, d: 26 },
-    start: { x: 0, z: 9 },
-    cup: { x: 0, z: -9 },
-    par: 2,
-    obstacles: [],
-  },
-  {
-    size: { w: 16, d: 28 },
-    start: { x: -5, z: 10 },
-    cup: { x: 5, z: -10 },
-    par: 3,
-    obstacles: [{ x: 0, z: 0, w: 6, d: 1.4 }],
-  },
-  {
-    size: { w: 18, d: 28 },
-    start: { x: -6, z: 10 },
-    cup: { x: 6, z: -10 },
-    par: 4,
-    obstacles: [
-      { x: -2.5, z: 2, w: 1.4, d: 9 },
-      { x: 3, z: -3, w: 1.4, d: 9 },
+    par: 5,
+    start: { x: 0, z: 42 }, // on the bridge, near end
+    cup: { x: 0, z: -42 }, // low floor, far end (in a pocket)
+    tiles: [
+      { x: 0, z: 0, w: 48, d: 92, y: 0 }, // low floor (whole footprint)
+      { x: 0, z: 5, w: 10, d: 82, y: UPPER }, // elevated bridge (x −5..5, z −36..46)
+    ],
+    walls: [
+      // Outer boundary (tall — contains bridge-level shots).
+      { x: -24, z: 0, w: 1.5, d: 93, h: 5 },
+      { x: 24, z: 0, w: 1.5, d: 93, h: 5 },
+      { x: 0, z: 46, w: 49.5, d: 1.5, h: 5 },
+      { x: 0, z: -46, w: 49.5, d: 1.5, h: 5 },
+      // Low-floor zigzag (h below the bridge → the bridge flies over them).
+      { x: -9, z: 32, w: 30, d: 1.5, h: 2.2 }, // gap on the right
+      { x: 9, z: 16, w: 30, d: 1.5, h: 2.2 }, // gap on the left
+      { x: -9, z: 0, w: 30, d: 1.5, h: 2.2 }, // gap on the right
+      { x: 9, z: -16, w: 30, d: 1.5, h: 2.2 }, // gap on the left
+      { x: -9, z: -30, w: 30, d: 1.5, h: 2.2 }, // gap on the right
+      // Cup pocket (open toward +z, where both routes arrive).
+      { x: -6, z: -42, w: 1, d: 9, h: 2.2 },
+      { x: 6, z: -42, w: 1, d: 9, h: 2.2 },
     ],
   },
 ];

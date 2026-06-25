@@ -224,6 +224,49 @@
         font-size: 15px;
       }
 
+      /* ----- Roue des jeux ----- */
+      .roulette-title {
+        text-align: center;
+        font-size: clamp(18px, 5vw, 22px);
+        font-weight: 800;
+        letter-spacing: 1px;
+        margin-bottom: 18px;
+      }
+      .wheel-wrap {
+        position: relative;
+        width: 320px;
+        max-width: 100%;
+        aspect-ratio: 1 / 1;
+        margin: 0 auto 18px;
+      }
+      .wheel-wrap canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        border-radius: 50%;
+        filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.55));
+      }
+      .wheel-pointer {
+        position: absolute;
+        top: -4px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 16px solid transparent;
+        border-right: 16px solid transparent;
+        border-top: 28px solid #fff;
+        z-index: 5;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+      }
+      #roulette-msg {
+        text-align: center;
+        opacity: 0.82;
+        margin-bottom: 14px;
+        font-size: 15px;
+        min-height: 1.2em;
+      }
+
       #error-banner {
         position: fixed;
         top: 18px;
@@ -248,7 +291,7 @@
         text-align: center;
       }
     </style>
-    <script type="module" crossorigin src="/assets/main-DvPGPyXn.js"></script>
+    <script type="module" crossorigin src="/assets/main-C5zmoPbN.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
   </head>
   <body>
@@ -305,6 +348,17 @@
       <p id="wait-msg">En attente que l'hôte lance la partie…</p>
 
       <button id="btn-leave" class="btn-link">← Quitter la partie</button>
+    </section>
+
+    <!-- Vue roue des jeux -->
+    <section id="view-roulette" class="panel hidden">
+      <div class="roulette-title">🎰 La roue des jeux</div>
+      <div class="wheel-wrap">
+        <div class="wheel-pointer"></div>
+        <canvas id="wheel" width="320" height="320"></canvas>
+      </div>
+      <p id="roulette-msg">En attente…</p>
+      <button id="spin-btn" class="btn primary hidden">Faire tourner 🎯</button>
     </section>
 
     <footer>© <span id="year"></span> El Muerto Arcade · Mini Golf bientôt jouable ici</footer>

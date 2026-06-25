@@ -1,11 +1,11 @@
 // Petit client WebSocket pour le lobby.
 // Gère la connexion et expose des événements simples au contrôleur d'UI.
 
-// En dev : serveur Node local sur le port 8080.
-// En prod : adapter à ton hébergement (même hôte en wss).
-const WS_URL = import.meta.env.DEV
-  ? `ws://${location.hostname}:8080`
-  : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+// On passe toujours par le même hôte que la page, sur le chemin /ws.
+// En dev, Vite proxifie /ws vers le serveur Node local (port 8080) ; ça permet
+// aussi de tout faire transiter par un tunnel HTTPS unique (cloudflared) pour
+// jouer depuis un téléphone. En prod, un reverse-proxy fait le même routage.
+const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 
 export class LobbyClient {
   constructor() {

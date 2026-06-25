@@ -1,19 +1,18 @@
-// Builds (and fully tears down) the geometry for a single hole: the green,
-// the surrounding walls, obstacle blocks, the cup and the flag. Returns the
-// play bounds + obstacle Box3 list that the PhysicsSystem needs.
+// Builds (and fully tears down) the geometry for a single hole made of grass
+// tiles at varying heights (low floor + elevated bridge) plus walls. Returns:
+//   • bounds    — a safety bounding box for the physics XZ clamp,
+//   • obstacles — wall Box3 list to collide against,
+//   • platforms — the elevated tiles, so the physics knows the floor height.
 
 import * as THREE from 'three';
-import { COLORS, BALL, HOLE } from '../core/Constants.js';
-
-const WALL_H = 0.9;
-const WALL_T = 0.6;
+import { COLORS, HOLE } from '../core/Constants.js';
 
 export class LevelBuilder {
   constructor(scene) {
     this.scene = scene;
     this.group = null;
     this._disposables = [];
-    this.flagGroup = null;
+    this.flag = null;
   }
 
   build(hole) {
@@ -21,65 +20,73 @@ export class LevelBuilder {
     this.group = new THREE.Group();
     this.scene.add(this.group);
 
-    const { w, d } = hole.size;
-    const halfW = w / 2;
-    const halfD = d / 2;
+    // --- Grass tiles (low floor + elevated bridge) ---
+    const lowMat = new THREE.MeshStandardMaterial({ color: COLORS.GREEN_DARK, roughness: 0.95 });
+    const highMat = new THREE.MeshStandardMaterial({ color: COLORS.GREEN, roughness: 0.95 });
+    const skirtMat = new THREE.MeshStandardMaterial({ color: COLORS.WALL, roughness: 0.85 });
+    this._track(null, lowMat);
+    this._track(null, highMat);
+    this._track(null, skirtMat);
 
-    // --- Green (a checkerboard-ish two-tone fairway) ---
-    const greenGeo = new THREE.PlaneGeometry(w, d);
-    greenGeo.rotateX(-Math.PI / 2);
-    const greenMat = new THREE.MeshStandardMaterial({
-      color: COLORS.GREEN,
-      roughness: 0.95,
-    });
-    const green = new THREE.Mesh(greenGeo, greenMat);
-    green.receiveShadow = false;
-    this.group.add(green);
-    this._track(greenGeo, greenMat);
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    const platforms = [];
 
-    // Subtle darker border ring for depth.
-    const ringGeo = new THREE.RingGeometry(0, 0, 1);
-    ringGeo.dispose();
-
-    // --- Outer walls ---
-    const wallMat = new THREE.MeshStandardMaterial({
-      color: COLORS.WALL,
-      roughness: 0.8,
-    });
-    this._track(null, wallMat);
-    const mkWall = (sx, sz, px, pz) => {
-      const g = new THREE.BoxGeometry(sx, WALL_H, sz);
-      const m = new THREE.Mesh(g, wallMat);
-      m.position.set(px, WALL_H / 2, pz);
+    for (const t of hole.tiles) {
+      const y = t.y || 0;
+      const g = new THREE.PlaneGeometry(t.w, t.d);
+      g.rotateX(-Math.PI / 2);
+      const m = new THREE.Mesh(g, y > 0 ? highMat : lowMat);
+      m.position.set(t.x, y, t.z);
       this.group.add(m);
       this._track(g, null);
-    };
-    mkWall(w + WALL_T * 2, WALL_T, 0, -halfD - WALL_T / 2); // far (z-)
-    mkWall(w + WALL_T * 2, WALL_T, 0, halfD + WALL_T / 2); // near (z+)
-    mkWall(WALL_T, d, -halfW - WALL_T / 2, 0); // left
-    mkWall(WALL_T, d, halfW + WALL_T / 2, 0); // right
 
-    // --- Obstacles ---
-    const obstacleBoxes = [];
-    const obsMat = new THREE.MeshStandardMaterial({
-      color: COLORS.OBSTACLE,
-      roughness: 0.7,
-    });
-    this._track(null, obsMat);
-    for (const o of hole.obstacles || []) {
-      const g = new THREE.BoxGeometry(o.w, WALL_H, o.d);
-      const m = new THREE.Mesh(g, obsMat);
-      m.position.set(o.x, WALL_H / 2, o.z);
-      this.group.add(m);
-      this._track(g, null);
-      const box = new THREE.Box3(
-        new THREE.Vector3(o.x - o.w / 2, 0, o.z - o.d / 2),
-        new THREE.Vector3(o.x + o.w / 2, WALL_H, o.z + o.d / 2),
-      );
-      obstacleBoxes.push(box);
+      if (y > 0) {
+        // Thin skirt so the bridge reads as a raised slab, and record it as a
+        // walkable platform for the physics.
+        const sg = new THREE.BoxGeometry(t.w, 0.5, t.d);
+        const sm = new THREE.Mesh(sg, skirtMat);
+        sm.position.set(t.x, y - 0.25, t.z);
+        this.group.add(sm);
+        this._track(sg, null);
+        platforms.push({
+          minX: t.x - t.w / 2,
+          maxX: t.x + t.w / 2,
+          minZ: t.z - t.d / 2,
+          maxZ: t.z + t.d / 2,
+          y,
+        });
+      } else {
+        minX = Math.min(minX, t.x - t.w / 2);
+        maxX = Math.max(maxX, t.x + t.w / 2);
+        minZ = Math.min(minZ, t.z - t.d / 2);
+        maxZ = Math.max(maxZ, t.z + t.d / 2);
+      }
     }
 
-    // --- Cup (dark disc) ---
+    // --- Walls (each with its own height) ---
+    const wallMat = new THREE.MeshStandardMaterial({ color: COLORS.WALL, roughness: 0.8 });
+    this._track(null, wallMat);
+    const wallBoxes = [];
+    for (const w of hole.walls || []) {
+      const h = w.h || 2.2;
+      const g = new THREE.BoxGeometry(w.w, h, w.d);
+      const m = new THREE.Mesh(g, wallMat);
+      m.position.set(w.x, h / 2, w.z);
+      this.group.add(m);
+      this._track(g, null);
+      // box.max.y carries the wall height so the physics can let high arcs over.
+      wallBoxes.push(
+        new THREE.Box3(
+          new THREE.Vector3(w.x - w.w / 2, 0, w.z - w.d / 2),
+          new THREE.Vector3(w.x + w.w / 2, h, w.z + w.d / 2),
+        ),
+      );
+    }
+
+    // --- Cup + flag ---
     const cupGeo = new THREE.CircleGeometry(HOLE.RADIUS, 24);
     cupGeo.rotateX(-Math.PI / 2);
     const cupMat = new THREE.MeshBasicMaterial({ color: COLORS.HOLE });
@@ -87,19 +94,13 @@ export class LevelBuilder {
     cup.position.set(hole.cup.x, 0.02, hole.cup.z);
     this.group.add(cup);
     this._track(cupGeo, cupMat);
-
-    // --- Flag ---
     this._buildFlag(hole.cup);
 
-    // Inner play bounds (ball center stays inside the walls).
-    const bounds = {
-      minX: -halfW,
-      maxX: halfW,
-      minZ: -halfD,
-      maxZ: halfD,
-    };
+    // Safety bounds: the low-floor bbox, expanded so it never fights the walls.
+    const m = 2;
+    const bounds = { minX: minX - m, maxX: maxX + m, minZ: minZ - m, maxZ: maxZ + m };
 
-    return { bounds, obstacles: obstacleBoxes };
+    return { bounds, obstacles: wallBoxes, platforms };
   }
 
   _buildFlag(cup) {
