@@ -135,7 +135,14 @@ net
       const game = state.wheel[m.resultIndex];
       rouletteMsg.textContent = `${game.emoji || ''} ${game.label} ! On y va…`;
       setTimeout(() => {
-        window.location.href = `${game.url}?room=${encodeURIComponent(state.code)}`;
+        // On passe l'identité (room + playerId + pseudo) pour que le mini-jeu
+        // puisse se reconnecter au même salon et faire jouer tout le monde
+        // ensemble (cf. multijoueur de la course).
+        const nm = loadName();
+        window.location.href =
+          `${game.url}?room=${encodeURIComponent(state.code)}` +
+          `&pid=${encodeURIComponent(state.playerId)}` +
+          `&name=${encodeURIComponent(nm)}`;
       }, 1200);
     });
   })

@@ -75,6 +75,28 @@ function broadcast(room, payload) {
   }
 }
 
+// Comme broadcast, mais saute un joueur (utile pour relayer une position à
+// tous *les autres* membres du salon).
+function broadcastExcept(room, exceptId, payload) {
+  const msg = JSON.stringify(payload);
+  for (const p of room.players.values()) {
+    if (p.id !== exceptId && p.socket.readyState === p.socket.OPEN) p.socket.send(msg);
+  }
+}
+
+// Vue publique enrichie pour la phase « course » (salle d'attente + résultats).
+function racePlayers(room) {
+  return [...room.players.values()].map((p) => ({
+    id: p.id,
+    name: p.name,
+    isHost: p.id === room.hostId,
+    connected: !!p.connected,
+    slot: p.slot ?? null,
+    finished: !!p.finished,
+    finishTime: p.finishTime || 0,
+  }));
+}
+
 function send(socket, payload) {
   if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(payload));
 }
@@ -108,6 +130,30 @@ wss.on('connection', (socket) => {
     broadcast(room, { type: 'players', players: publicPlayers(room) });
   }
 
+  // Déconnexion de la socket. Tant que la partie n'a pas démarré, on retire le
+  // joueur tout de suite (comportement du lobby). Une fois la partie lancée, la
+  // navigation entre pages (lobby -> racing.html) ferme la socket : on garde
+  // alors le joueur en « hors-ligne » et on laisse un délai de grâce pour qu'il
+  // se reconnecte (race-hello) sans détruire le salon.
+  function handleClose() {
+    if (!currentRoom) return;
+    const room = currentRoom;
+    if (!room.started) {
+      leaveRoom();
+      return;
+    }
+    const player = room.players.get(playerId);
+    if (player) player.connected = false;
+    currentRoom = null;
+    if (room.phase) {
+      broadcast(room, { type: 'race-roster', players: racePlayers(room), hostId: room.hostId });
+    }
+    const anyConnected = [...room.players.values()].some((p) => p.connected);
+    if (!anyConnected && !room.graceTimer) {
+      room.graceTimer = setTimeout(() => rooms.delete(room.code), 90000);
+    }
+  }
+
   socket.on('message', (raw) => {
     let msg;
     try {
@@ -121,7 +167,7 @@ wss.on('connection', (socket) => {
         if (currentRoom) leaveRoom();
         const code = makeCode();
         playerId = makeId();
-        const player = { id: playerId, name: sanitizeName(msg.name), socket };
+        const player = { id: playerId, name: sanitizeName(msg.name), socket, connected: true };
         const room = {
           code,
           hostId: playerId,
@@ -153,7 +199,7 @@ wss.on('connection', (socket) => {
         }
         if (currentRoom) leaveRoom();
         playerId = makeId();
-        const player = { id: playerId, name: sanitizeName(msg.name), socket };
+        const player = { id: playerId, name: sanitizeName(msg.name), socket, connected: true };
         room.players.set(playerId, player);
         currentRoom = room;
         send(socket, {
@@ -204,6 +250,112 @@ wss.on('connection', (socket) => {
         break;
       }
 
+      // ---- Phase « course » multijoueur (page racing.html) ----
+
+      // Le joueur arrive sur la page de course : on le ré-associe à son salon
+      // grâce au playerId transmis dans l'URL (sinon on l'ajoute comme nouveau
+      // participant). On annule tout délai de grâce en cours.
+      case 'race-hello': {
+        const code = (msg.code || '').toUpperCase().trim();
+        const room = rooms.get(code);
+        if (!room) return send(socket, { type: 'race-gone' });
+        if (room.graceTimer) {
+          clearTimeout(room.graceTimer);
+          room.graceTimer = null;
+        }
+        if (currentRoom && currentRoom !== room) leaveRoom();
+
+        let player = msg.pid ? room.players.get(msg.pid) : null;
+        if (player) {
+          player.socket = socket;
+          player.connected = true;
+          if (msg.name) player.name = sanitizeName(msg.name);
+        } else {
+          playerId = makeId();
+          player = { id: playerId, name: sanitizeName(msg.name), socket, connected: true };
+          room.players.set(playerId, player);
+        }
+        playerId = player.id;
+        currentRoom = room;
+        if (!room.phase) room.phase = 'waiting';
+        if (room.raceMapIndex == null) room.raceMapIndex = 0;
+        // Si l'hôte désigné n'est pas (ou plus) connecté, le premier arrivé
+        // récupère la main pour pouvoir lancer la course.
+        const host = room.players.get(room.hostId);
+        if (!host || !host.connected) room.hostId = player.id;
+
+        send(socket, {
+          type: 'race-welcome',
+          you: player.id,
+          hostId: room.hostId,
+          mapIndex: room.raceMapIndex,
+          phase: room.phase,
+          players: racePlayers(room),
+        });
+        broadcast(room, { type: 'race-roster', players: racePlayers(room), hostId: room.hostId });
+        break;
+      }
+
+      // L'hôte change le circuit choisi dans la salle d'attente.
+      case 'race-setmap': {
+        const room = currentRoom;
+        if (!room || room.hostId !== playerId) return;
+        room.raceMapIndex = msg.mapIndex | 0;
+        broadcast(room, { type: 'race-map', mapIndex: room.raceMapIndex });
+        break;
+      }
+
+      // L'hôte lance la course : on attribue une place (slot) à chaque joueur
+      // connecté et on diffuse le top départ. Chaque client lance son propre
+      // décompte 3-2-1 à la réception.
+      case 'race-go': {
+        const room = currentRoom;
+        if (!room || room.hostId !== playerId) return;
+        const conn = [...room.players.values()].filter((p) => p.connected);
+        conn.forEach((p, i) => {
+          p.slot = i;
+          p.finished = false;
+          p.finishTime = 0;
+        });
+        room.phase = 'racing';
+        broadcast(room, {
+          type: 'race-start',
+          mapIndex: room.raceMapIndex,
+          players: conn.map((p) => ({ id: p.id, name: p.name, slot: p.slot })),
+        });
+        break;
+      }
+
+      // Position d'un joueur, relayée telle quelle aux autres membres.
+      case 'race-state': {
+        const room = currentRoom;
+        if (!room || room.phase !== 'racing') return;
+        broadcastExcept(room, playerId, { type: 'race-peer', id: playerId, s: msg.s });
+        break;
+      }
+
+      // Un joueur franchit la ligne d'arrivée.
+      case 'race-finish': {
+        const room = currentRoom;
+        if (!room) return;
+        const p = room.players.get(playerId);
+        if (p) {
+          p.finished = true;
+          p.finishTime = msg.time;
+        }
+        broadcast(room, { type: 'race-finished', id: playerId, time: msg.time });
+        break;
+      }
+
+      // L'hôte renvoie tout le monde vers la salle d'attente / choix du circuit.
+      case 'race-tomenu': {
+        const room = currentRoom;
+        if (!room || room.hostId !== playerId) return;
+        room.phase = 'waiting';
+        broadcast(room, { type: 'race-tolobby', mapIndex: room.raceMapIndex, hostId: room.hostId });
+        break;
+      }
+
       case 'leave': {
         leaveRoom();
         break;
@@ -214,6 +366,6 @@ wss.on('connection', (socket) => {
     }
   });
 
-  socket.on('close', () => leaveRoom());
-  socket.on('error', () => leaveRoom());
+  socket.on('close', () => handleClose());
+  socket.on('error', () => handleClose());
 });
