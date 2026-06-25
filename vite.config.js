@@ -23,6 +23,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         minigolf: resolve(__dirname, 'minigolf.html'),
+        petanque: resolve(__dirname, 'petanque.html'),
         racing: resolve(__dirname, 'racing.html'),
         colorhunt: resolve(__dirname, 'colorhunt.html'),
       },

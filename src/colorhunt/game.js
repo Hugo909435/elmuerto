@@ -25,11 +25,25 @@ export class Game {
   }
 
   // Evaluate a captured [r,g,b] against the current target.
-  evaluate(capturedRgb) {
+  // timeElapsed (seconds, 0-30): if provided, adds speed bonus (MP mode).
+  evaluate(capturedRgb, timeElapsed = null) {
     const targetLab = rgbToLab(...this.target.rgb);
     const capturedLab = rgbToLab(...capturedRgb);
     const dE = deltaE2000(targetLab, capturedLab);
-    const { points, rating } = scoreFromDeltaE(dE);
+    const { points: colorScore, rating } = scoreFromDeltaE(dE);
+
+    let points;
+    if (timeElapsed !== null) {
+      // Couleur : jusqu'à 90 pts. Vitesse : jusqu'à 10 pts, mais SEULEMENT si la
+      // couleur est bonne (speedPts ∝ précision couleur → noir sur cible vive = 0 pts total)
+      const colorPts   = Math.round(colorScore * 0.9);
+      const speedFrac  = Math.max(0, 1 - timeElapsed / 30);
+      const colorFrac  = colorScore / 100; // 0-1
+      const speedPts   = Math.round(speedFrac * colorFrac * 10);
+      points = colorPts + speedPts;
+    } else {
+      points = colorScore; // solo : inchangé (0-100)
+    }
 
     this.totalScore += points;
     const result = {
@@ -37,6 +51,7 @@ export class Game {
       target: this.target.rgb,
       captured: capturedRgb,
       deltaE: dE,
+      colorScore,
       points,
       rating,
     };

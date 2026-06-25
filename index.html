@@ -2,34 +2,25 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>El Muerto Arcade — Parties privées</title>
     <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
       :root {
         --bg: #0b1020;
         --card: rgba(255, 255, 255, 0.04);
         --card-border: rgba(255, 255, 255, 0.1);
         --accent: #4ade80;
         --accent-2: #22a85a;
+        --team1: #f87171;
+        --team2: #60a5fa;
       }
       body {
         font-family: 'Trebuchet MS', system-ui, sans-serif;
         color: #fff;
-        background: radial-gradient(
-            1200px 800px at 80% -10%,
-            #1b2a4a 0%,
-            transparent 60%
-          ),
-          radial-gradient(900px 700px at -10% 110%, #16352a 0%, transparent 55%),
-          var(--bg);
+        background: radial-gradient(1200px 800px at 80% -10%, #1b2a4a 0%, transparent 60%),
+                    radial-gradient(900px 700px at -10% 110%, #16352a 0%, transparent 55%),
+                    var(--bg);
         min-height: 100vh;
         display: flex;
         flex-direction: column;
@@ -38,258 +29,117 @@
         padding: 32px 20px 60px;
       }
 
-      header {
-        text-align: center;
-        margin-bottom: clamp(28px, 6vw, 48px);
-      }
-      .logo {
-        font-size: clamp(12px, 2.4vw, 15px);
-        letter-spacing: 6px;
-        text-transform: uppercase;
-        color: var(--accent);
-        opacity: 0.9;
-        margin-bottom: 12px;
-      }
-      h1 {
-        font-size: clamp(34px, 8vw, 64px);
-        line-height: 1.02;
-        letter-spacing: 1px;
-        text-shadow: 0 6px 30px rgba(0, 0, 0, 0.5);
-      }
-      header p {
-        margin-top: 14px;
-        font-size: clamp(14px, 3.4vw, 18px);
-        opacity: 0.65;
-      }
+      header { text-align: center; margin-bottom: clamp(28px, 6vw, 48px); }
+      .logo { font-size: clamp(12px, 2.4vw, 15px); letter-spacing: 6px; text-transform: uppercase; color: var(--accent); opacity: 0.9; margin-bottom: 12px; }
+      h1 { font-size: clamp(34px, 8vw, 64px); line-height: 1.02; letter-spacing: 1px; text-shadow: 0 6px 30px rgba(0,0,0,0.5); }
+      header p { margin-top: 14px; font-size: clamp(14px, 3.4vw, 18px); opacity: 0.65; }
 
-      .panel {
-        width: 100%;
-        max-width: 440px;
-        background: var(--card);
-        border: 1px solid var(--card-border);
-        border-radius: 22px;
-        padding: clamp(22px, 5vw, 32px);
-        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4);
-      }
-      .hidden {
-        display: none !important;
-      }
+      .panel { width: 100%; max-width: 480px; background: var(--card); border: 1px solid var(--card-border); border-radius: 22px; padding: clamp(22px, 5vw, 32px); box-shadow: 0 18px 50px rgba(0,0,0,0.4); }
+      .hidden { display: none !important; }
 
-      label {
-        display: block;
-        font-size: 13px;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
-        opacity: 0.6;
-        margin: 0 0 8px 4px;
-      }
-      input {
-        width: 100%;
-        background: rgba(0, 0, 0, 0.3);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        border-radius: 12px;
-        padding: 14px 16px;
-        font-size: 17px;
-        color: #fff;
-        font-family: inherit;
-        margin-bottom: 18px;
-        outline: none;
-        transition: border-color 0.15s ease;
-      }
-      input:focus {
-        border-color: var(--accent);
-      }
-      input.code {
-        text-align: center;
-        font-size: 28px;
-        font-weight: 800;
-        letter-spacing: 10px;
-        text-transform: uppercase;
-      }
+      label { display: block; font-size: 13px; letter-spacing: 0.5px; text-transform: uppercase; opacity: 0.6; margin: 0 0 8px 4px; }
+      input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; padding: 14px 16px; font-size: 17px; color: #fff; font-family: inherit; margin-bottom: 18px; outline: none; transition: border-color 0.15s ease; }
+      input:focus { border-color: var(--accent); }
+      input.code { text-align: center; font-size: 28px; font-weight: 800; letter-spacing: 10px; text-transform: uppercase; }
 
-      .btn {
-        cursor: pointer;
-        width: 100%;
-        border: none;
-        border-radius: 999px;
-        padding: 16px;
-        font-size: 17px;
-        font-weight: 800;
-        letter-spacing: 1px;
-        text-transform: uppercase;
-        font-family: inherit;
-        transition: transform 0.1s ease, filter 0.15s ease;
-      }
-      .btn:active {
-        transform: scale(0.97);
-      }
-      .btn.primary {
-        background: linear-gradient(180deg, var(--accent), var(--accent-2));
-        color: #05290f;
-      }
-      .btn.ghost {
-        background: rgba(255, 255, 255, 0.06);
-        color: #fff;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-      }
-      .btn + .btn {
-        margin-top: 12px;
-      }
-      .btn-link {
-        display: inline-block;
-        margin-top: 18px;
-        background: none;
-        border: none;
-        color: rgba(255, 255, 255, 0.55);
-        cursor: pointer;
-        font-size: 14px;
-        font-family: inherit;
-        text-decoration: underline;
-      }
+      .btn { cursor: pointer; width: 100%; border: none; border-radius: 999px; padding: 16px; font-size: 17px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; font-family: inherit; transition: transform 0.1s ease, filter 0.15s ease; }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: linear-gradient(180deg, var(--accent), var(--accent-2)); color: #05290f; }
+      .btn.ghost { background: rgba(255,255,255,0.06); color: #fff; border: 1px solid rgba(255,255,255,0.15); }
+      .btn + .btn { margin-top: 12px; }
+      .btn-link { display: inline-block; margin-top: 18px; background: none; border: none; color: rgba(255,255,255,0.55); cursor: pointer; font-size: 14px; font-family: inherit; text-decoration: underline; }
 
-      .or {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin: 22px 0;
-        opacity: 0.4;
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-      }
-      .or::before,
-      .or::after {
-        content: '';
-        flex: 1;
-        height: 1px;
-        background: rgba(255, 255, 255, 0.2);
-      }
+      .or { display: flex; align-items: center; gap: 12px; margin: 22px 0; opacity: 0.4; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; }
+      .or::before, .or::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.2); }
 
       /* ----- Salle d'attente ----- */
-      .room-code-box {
-        text-align: center;
-        margin-bottom: 22px;
-      }
-      .room-code-box .small {
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        opacity: 0.5;
-      }
-      #room-code {
-        font-size: clamp(40px, 12vw, 56px);
-        font-weight: 800;
-        letter-spacing: 12px;
-        color: var(--accent);
-        margin: 6px 0 10px;
-      }
-      ul {
-        list-style: none;
-      }
-      .player {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 12px 14px;
-        background: rgba(0, 0, 0, 0.22);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        margin-bottom: 8px;
-      }
-      .player .dot {
-        width: 9px;
-        height: 9px;
-        border-radius: 50%;
-        background: var(--accent);
-        box-shadow: 0 0 8px var(--accent);
-      }
-      .player .pname {
-        flex: 1;
-        font-weight: 600;
-      }
-      .player .badge {
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        padding: 3px 10px;
-        border-radius: 999px;
-        background: rgba(74, 222, 128, 0.18);
-        color: var(--accent);
-      }
-      #wait-msg {
-        text-align: center;
-        opacity: 0.65;
-        margin-top: 16px;
-        font-size: 15px;
-      }
+      .room-code-box { text-align: center; margin-bottom: 22px; }
+      .room-code-box .small { font-size: 12px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.5; }
+      #room-code { font-size: clamp(40px, 12vw, 56px); font-weight: 800; letter-spacing: 12px; color: var(--accent); margin: 6px 0 10px; }
+      ul { list-style: none; }
+      .player { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; margin-bottom: 8px; }
+      .player .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+      .player .pname { flex: 1; font-weight: 600; }
+      .player .badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 3px 10px; border-radius: 999px; background: rgba(74,222,128,0.18); color: var(--accent); }
+      #wait-msg { text-align: center; opacity: 0.65; margin-top: 16px; font-size: 15px; }
 
-      /* ----- Roue des jeux ----- */
-      .roulette-title {
-        text-align: center;
-        font-size: clamp(18px, 5vw, 22px);
-        font-weight: 800;
-        letter-spacing: 1px;
-        margin-bottom: 18px;
-      }
-      .wheel-wrap {
-        position: relative;
-        width: 320px;
-        max-width: 100%;
-        aspect-ratio: 1 / 1;
-        margin: 0 auto 18px;
-      }
-      .wheel-wrap canvas {
-        width: 100%;
-        height: 100%;
-        display: block;
-        border-radius: 50%;
-        filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.55));
-      }
-      .wheel-pointer {
-        position: absolute;
-        top: -4px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 0;
-        height: 0;
-        border-left: 16px solid transparent;
-        border-right: 16px solid transparent;
-        border-top: 28px solid #fff;
-        z-index: 5;
-        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
-      }
-      #roulette-msg {
-        text-align: center;
-        opacity: 0.82;
-        margin-bottom: 14px;
-        font-size: 15px;
-        min-height: 1.2em;
-      }
+      /* ----- Config ----- */
+      .section-title { font-size: 18px; font-weight: 800; margin-bottom: 20px; }
+      .chip-group { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+      .chip { cursor: pointer; padding: 10px 18px; border-radius: 999px; font-size: 15px; font-weight: 700; font-family: inherit; border: 2px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.7); transition: all 0.12s ease; }
+      .chip:active { transform: scale(0.95); }
+      .chip.active { border-color: var(--accent); background: rgba(74,222,128,0.15); color: #fff; }
+      .chip.team1.active { border-color: var(--team1); background: rgba(248,113,113,0.15); color: #fff; }
+      .chip.team2.active { border-color: var(--team2); background: rgba(96,165,250,0.15); color: #fff; }
+      /* Compteur de manches */
+      .rounds-counter { display: flex; align-items: center; gap: 0; margin-bottom: 20px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.14); border-radius: 14px; overflow: hidden; width: fit-content; }
+      .rounds-step { cursor: pointer; background: none; border: none; color: #fff; font-size: 24px; font-weight: 700; width: 52px; height: 52px; font-family: inherit; opacity: 0.8; transition: background 0.1s; }
+      .rounds-step:active { background: rgba(255,255,255,0.1); }
+      #rounds-val { min-width: 56px; text-align: center; font-size: 28px; font-weight: 900; color: var(--accent); user-select: none; }
+      #config-teams-row { margin-bottom: 20px; }
+      #config-teammode-row { margin-bottom: 20px; }
+      #config-wait { text-align: center; opacity: 0.65; padding: 20px 0; font-size: 15px; }
 
-      #error-banner {
-        position: fixed;
-        top: 18px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #b91c1c;
-        color: #fff;
-        padding: 12px 22px;
-        border-radius: 12px;
-        font-size: 14px;
-        font-weight: 600;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-        z-index: 100;
-        max-width: 90vw;
-        text-align: center;
-      }
+      /* ----- Team pick (Mario Kart style) ----- */
+      .team-pick-title { font-size: 20px; font-weight: 800; text-align: center; margin-bottom: 18px; }
+      .teams-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+      .team-col { background: rgba(0,0,0,0.25); border-radius: 16px; padding: 14px 12px; min-height: 140px; display: flex; flex-direction: column; gap: 8px; border: 2px solid transparent; transition: border-color 0.15s; }
+      .team-col.team-col-1 { border-color: rgba(248,113,113,0.3); }
+      .team-col.team-col-2 { border-color: rgba(96,165,250,0.3); }
+      .team-col-header { font-size: 14px; font-weight: 800; text-align: center; padding: 6px; border-radius: 8px; margin-bottom: 4px; }
+      .team-col-header.h1 { background: rgba(248,113,113,0.2); color: var(--team1); }
+      .team-col-header.h2 { background: rgba(96,165,250,0.2); color: var(--team2); }
+      .team-members { flex: 1; }
+      .team-member { padding: 6px 10px; border-radius: 8px; font-size: 13px; font-weight: 600; background: rgba(255,255,255,0.07); margin-bottom: 5px; }
+      .team-member.is-me { font-weight: 800; color: #ffe27a; }
+      .join-team-btn { padding: 10px 12px; font-size: 13px; border-radius: 12px; margin-top: 4px; }
+      .join-team-btn.my-pick { font-weight: 800; }
+      .team-col-1 .join-team-btn.my-pick { border-color: var(--team1); background: rgba(248,113,113,0.2); color: #fff; }
+      .team-col-2 .join-team-btn.my-pick { border-color: var(--team2); background: rgba(96,165,250,0.2); color: #fff; }
+      #teams-confirm-btn { margin-bottom: 0; }
+      #teams-wait { text-align: center; opacity: 0.6; font-size: 14px; margin-top: 8px; }
+      .team-unassigned { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; margin-bottom: 12px; }
+      .team-unassigned .team-member { background: rgba(255,255,255,0.05); font-size: 12px; padding: 4px 8px; }
+      .team-unassigned-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.45; margin-bottom: 6px; }
 
-      footer {
-        margin-top: 36px;
-        font-size: 13px;
-        opacity: 0.4;
-        text-align: center;
-      }
+      /* ----- Waiting return ----- */
+      #view-waitReturn { text-align: center; }
+      .wait-return-icon { font-size: 52px; margin-bottom: 16px; }
+      .wait-return-title { font-size: 22px; font-weight: 800; margin-bottom: 10px; }
+      .wait-return-sub { opacity: 0.7; font-size: 15px; }
+
+      /* ----- Sélecteur de jeu ----- */
+      .roulette-title { text-align: center; font-size: clamp(18px, 5vw, 22px); font-weight: 800; letter-spacing: 1px; margin-bottom: 10px; }
+      .round-counter { text-align: center; font-size: 13px; opacity: 0.7; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 14px; }
+      #roulette-msg { text-align: center; opacity: 0.82; margin-bottom: 14px; font-size: 15px; min-height: 1.2em; }
+      .game-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+      .gcard { cursor: pointer; background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 16px 10px; text-align: center; transition: all 0.15s ease; font-family: inherit; color: #fff; width: 100%; }
+      .gcard:active { transform: scale(0.95); }
+      .gcard:not(.disabled):hover { border-color: var(--accent); background: rgba(74,222,128,0.1); }
+      .gcard-emoji { font-size: 34px; display: block; margin-bottom: 6px; }
+      .gcard-name { font-weight: 700; font-size: 13px; }
+      .gcard.disabled { opacity: 0.45; pointer-events: none; cursor: default; }
+      .gcard.picked { border-color: var(--accent); background: rgba(74,222,128,0.15); }
+
+      /* ----- Scoreboard (entre manches) ----- */
+      #scoreboard { margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 14px; }
+      .scoreboard-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.55; margin-bottom: 10px; text-align: center; }
+      .score-entry { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: rgba(0,0,0,0.2); margin-bottom: 6px; }
+      .score-rank { font-size: 18px; width: 28px; text-align: center; }
+      .score-name { flex: 1; font-weight: 600; font-size: 14px; }
+      .score-pts { font-weight: 800; font-size: 15px; color: #ffe27a; }
+      .score-team-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+      .score-team-badge.t1 { background: rgba(248,113,113,0.2); color: var(--team1); }
+      .score-team-badge.t2 { background: rgba(96,165,250,0.2); color: var(--team2); }
+
+      /* ----- Tournament end ----- */
+      .tournament-title { font-size: clamp(22px, 6vw, 32px); font-weight: 900; text-align: center; margin-bottom: 6px; }
+      .tournament-sub { text-align: center; opacity: 0.65; margin-bottom: 20px; font-size: 14px; }
+
+      /* ----- Error banner ----- */
+      #error-banner { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); background: #b91c1c; color: #fff; padding: 12px 22px; border-radius: 12px; font-size: 14px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 100; max-width: 90vw; text-align: center; }
+
+      footer { margin-top: 36px; font-size: 13px; opacity: 0.4; text-align: center; }
     </style>
   </head>
   <body>
@@ -310,17 +160,10 @@
       <button id="btn-show-join" class="btn ghost">Rejoindre une partie</button>
     </section>
 
-    <!-- Vue rejoindre : saisie du code -->
+    <!-- Vue rejoindre -->
     <section id="view-join" class="panel hidden">
       <label for="code-join">Code de la partie</label>
-      <input
-        id="code-join"
-        class="code"
-        type="text"
-        maxlength="4"
-        placeholder="XXXX"
-        autocomplete="off"
-      />
+      <input id="code-join" class="code" type="text" maxlength="4" placeholder="XXXX" autocomplete="off" />
       <label for="name-join">Ton pseudo</label>
       <input id="name-join" type="text" maxlength="16" placeholder="Ex : Hugo" />
       <button id="btn-join" class="btn primary">Rejoindre</button>
@@ -332,38 +175,105 @@
       <div class="room-code-box">
         <div class="small">Code de la partie</div>
         <div id="room-code">----</div>
-        <button id="btn-copy-code" class="btn ghost" style="width: auto; padding: 10px 22px; font-size: 13px;">
-          Copier le code
-        </button>
+        <button id="btn-copy-code" class="btn ghost" style="width:auto;padding:10px 22px;font-size:13px;">Copier le code</button>
       </div>
-
       <label>Joueurs connectés</label>
       <ul id="player-list"></ul>
-
-      <button id="start-btn" class="btn primary hidden" style="margin-top: 14px;">
-        Lancer la partie
-      </button>
+      <button id="start-btn" class="btn primary hidden" style="margin-top:14px;">Lancer la partie →</button>
       <p id="wait-msg">En attente que l'hôte lance la partie…</p>
-
       <button id="btn-leave" class="btn-link">← Quitter la partie</button>
     </section>
 
-    <!-- Vue roue des jeux -->
-    <section id="view-roulette" class="panel hidden">
-      <div class="roulette-title">🎰 La roue des jeux</div>
-      <div class="wheel-wrap">
-        <div class="wheel-pointer"></div>
-        <canvas id="wheel" width="320" height="320"></canvas>
+    <!-- Vue configuration (hôte seulement interagit) -->
+    <section id="view-config" class="panel hidden">
+      <div class="section-title">⚙️ Configuration</div>
+
+      <!-- Hôte -->
+      <div id="config-host-form">
+        <label>Nombre de manches</label>
+        <div class="rounds-counter">
+          <button class="rounds-step" id="rounds-dec">−</button>
+          <span id="rounds-val">5</span>
+          <button class="rounds-step" id="rounds-inc">+</button>
+        </div>
+
+        <div id="config-teams-row">
+          <label>Mode</label>
+          <div class="chip-group">
+            <button class="chip active" id="mode-solo">Individuel 🎮</button>
+            <button class="chip" id="mode-teams">Par équipes 🤝</button>
+          </div>
+        </div>
+
+        <div id="config-teammode-row" class="hidden">
+          <label>Équipes</label>
+          <div class="chip-group">
+            <button class="chip active" id="tm-random">Aléatoire 🎲</button>
+            <button class="chip" id="tm-manual">Manuel 🗂️</button>
+          </div>
+        </div>
+
+        <button id="config-confirm-btn" class="btn primary">Lancer →</button>
       </div>
-      <p id="roulette-msg">En attente…</p>
-      <button id="spin-btn" class="btn primary hidden">Faire tourner 🎯</button>
+
+      <!-- Non-hôte -->
+      <div id="config-wait" class="hidden">⏳ L'hôte configure la partie…</div>
+
+      <button id="btn-leave-config" class="btn-link">← Quitter</button>
     </section>
 
-    <footer>© <span id="year"></span> El Muerto Arcade · Mini Golf bientôt jouable ici</footer>
+    <!-- Vue team picker (Mario Kart) -->
+    <section id="view-teamPick" class="panel hidden">
+      <div class="team-pick-title">🎮 Choisis ton équipe</div>
+      <div class="team-unassigned-label">Sans équipe</div>
+      <div class="team-unassigned" id="team-unassigned"></div>
+      <div class="teams-grid">
+        <div class="team-col team-col-1">
+          <div class="team-col-header h1">🔴 Équipe Rouge</div>
+          <div class="team-members" id="team-1-members"></div>
+          <button class="btn ghost join-team-btn" data-team="1">Rejoindre</button>
+        </div>
+        <div class="team-col team-col-2">
+          <div class="team-col-header h2">🔵 Équipe Bleue</div>
+          <div class="team-members" id="team-2-members"></div>
+          <button class="btn ghost join-team-btn" data-team="2">Rejoindre</button>
+        </div>
+      </div>
+      <button id="teams-confirm-btn" class="btn primary hidden">Confirmer les équipes →</button>
+      <p id="teams-wait" class="hidden">En attente de la confirmation de l'hôte…</p>
+      <button id="btn-leave-team" class="btn-link">← Quitter</button>
+    </section>
 
-    <script>
-      document.getElementById('year').textContent = new Date().getFullYear();
-    </script>
+    <!-- Vue retour au lobby (entre manches) -->
+    <section id="view-waitReturn" class="panel hidden">
+      <div class="wait-return-icon">⏳</div>
+      <div class="wait-return-title">En attente des joueurs…</div>
+      <p class="wait-return-sub" id="wait-return-msg">Retour au lobby…</p>
+    </section>
+
+    <!-- Vue fin de tournoi -->
+    <section id="view-tournament" class="panel hidden">
+      <div class="tournament-title">🏆 Tournoi terminé !</div>
+      <p class="tournament-sub" id="tournament-sub">Classement final</p>
+      <div id="tournament-scores"></div>
+      <button id="tournament-replay-btn" class="btn primary" style="margin-top:20px;">Nouvelle partie 🎮</button>
+    </section>
+
+    <!-- Vue sélecteur de jeu -->
+    <section id="view-roulette" class="panel hidden">
+      <div class="roulette-title">🎮 Choisir le mini-jeu</div>
+      <div class="round-counter hidden" id="round-counter"></div>
+      <p id="roulette-msg">En attente…</p>
+      <div class="game-picker" id="game-picker-grid"></div>
+      <div id="scoreboard" class="hidden">
+        <div class="scoreboard-title">Scores actuels</div>
+        <div id="scoreboard-list"></div>
+      </div>
+    </section>
+
+    <footer>© <span id="year"></span> El Muerto Arcade</footer>
+
+    <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
     <script type="module" src="/src/lobby/lobby.js"></script>
   </body>
 </html>

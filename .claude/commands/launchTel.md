@@ -10,8 +10,13 @@ jouer depuis son téléphone (caméra incluse), et donne-lui **une seule URL HTT
 à ouvrir. Suis ces étapes dans l'ordre, sans poser de question — fais tout toi-même.
 
 ## Pré-requis (vérifie en silence)
-- `cloudflared` doit être dans le PATH (`which cloudflared`). S'il manque, dis-le
-  clairement et stoppe.
+- `cloudflared` : cherche d'abord dans le PATH, puis dans le dossier du projet
+  (`.\cloudflared.exe`). S'il n'est nulle part, **télécharge-le silencieusement**
+  dans le dossier du projet sans demander à l'utilisateur :
+  ```powershell
+  Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "D:\Application coder\elmuerto\cloudflared.exe" -UseBasicParsing
+  ```
+  Utilise ensuite `.\cloudflared.exe` pour toutes les commandes cloudflared.
 - Le port vite utilisé ici est **5180** (fixe), le serveur de lobby **8080**.
 - `vite.config.js` doit déjà contenir `host: true`, `allowedHosts: true` et le
   proxy `'/ws' -> ws://localhost:8080`. Si ce n'est pas le cas, ajoute-le avant de
@@ -26,6 +31,8 @@ foreach ($port in 5180,8080) {
   if ($pids) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }
 }
 Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+# Tue aussi le cloudflared.exe local s'il tourne
+Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 ```
 
 ## 2. Démarrer le serveur de lobby (WebSocket, port 8080)
@@ -45,9 +52,10 @@ vérifie : `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5180/` doi
 renvoyer `200`.
 
 ## 4. Démarrer le tunnel HTTPS public (cloudflared)
-Lance en arrière-plan (`run_in_background: true`) :
+Lance en arrière-plan (`run_in_background: true`), en utilisant `.\cloudflared.exe`
+si cloudflared n'est pas dans le PATH :
 ```
-cloudflared tunnel --url http://localhost:5180 --no-autoupdate
+.\cloudflared.exe tunnel --url http://localhost:5180 --no-autoupdate
 ```
 Attends ~6-8 s, puis extrais l'URL publique depuis le fichier de log du process :
 ```

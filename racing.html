@@ -162,6 +162,7 @@
         <button id="restart-btn" class="btn">Rejouer</button>
         <button id="change-btn" class="btn ghost">Autre circuit</button>
       </div>
+      <button id="back-wheel-btn" class="btn" style="display:none;margin-top:10px;background:linear-gradient(180deg,#4ade80,#22a85a);color:#05290f;">Retour à la roue 🎰</button>
     </div>
 
     <script>
@@ -884,6 +885,22 @@
       buildMapCards();
       buildTrack(MAPS[0]); spawnRacers(); state = 'menu'; raceTime = 0;
       requestAnimationFrame(loop);
+    </script>
+    <script>
+      (function() {
+        const p = new URLSearchParams(location.search);
+        const room = p.get('room'), pid = p.get('pid');
+        if (!room || !pid) return;
+        const btn = document.getElementById('back-wheel-btn');
+        if (btn) {
+          btn.style.display = '';
+          btn.addEventListener('click', () => {
+            location.href = '/?room=' + encodeURIComponent(room) + '&pid=' + encodeURIComponent(pid);
+          });
+        }
+        const homeBtn = document.getElementById('home-btn');
+        if (homeBtn) homeBtn.href = '/?room=' + encodeURIComponent(room) + '&pid=' + encodeURIComponent(pid);
+      })();
     </script>
   </body>
 </html>

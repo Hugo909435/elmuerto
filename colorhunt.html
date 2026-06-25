@@ -2,10 +2,7 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Color Hunt</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -16,115 +13,147 @@
         -webkit-user-select: none; user-select: none;
         touch-action: manipulation;
       }
-      #stage { position: fixed; inset: 0; }
-      #cam {
-        position: fixed; inset: 0;
-        width: 100%; height: 100%;
-        object-fit: cover;
-        background: #111;
-        transform: scaleX(1);
-      }
 
-      /* ---------- Home button ---------- */
-      #home-btn {
-        position: fixed;
-        top: max(14px, env(safe-area-inset-top)); left: 14px;
-        z-index: 9; pointer-events: auto;
-        display: flex; align-items: center; justify-content: center;
-        text-decoration: none; background: rgba(0, 0, 0, 0.5);
-        border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 50%;
-        width: 44px; height: 44px; font-size: 20px; color: #fff; cursor: pointer;
-      }
+      /* ---- Caméra ---- */
+      #cam { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #111; }
 
-      /* ---------- Reticle ---------- */
+      /* ---- Réticule ---- */
       #reticle {
-        position: fixed;
-        top: 50%; left: 50%;
+        position: fixed; top: 50%; left: 50%;
         width: 38vmin; height: 38vmin;
         transform: translate(-50%, -50%);
-        border: 4px solid rgba(255, 255, 255, 0.9);
+        border: 4px solid rgba(255,255,255,0.9);
         border-radius: 18px;
-        box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.28);
-        pointer-events: none;
-        z-index: 5;
+        box-shadow: 0 0 0 4000px rgba(0,0,0,0.28);
+        pointer-events: none; z-index: 5;
       }
       #reticle::after {
-        content: '';
-        position: absolute; inset: 10px;
-        border-radius: 12px;
-        border: 2px dashed rgba(255, 255, 255, 0.45);
+        content: ''; position: absolute; inset: 10px;
+        border-radius: 12px; border: 2px dashed rgba(255,255,255,0.45);
       }
       #live-chip {
-        position: fixed;
-        top: calc(50% + 22vmin); left: 50%;
+        position: fixed; top: calc(50% + 22vmin); left: 50%;
         transform: translateX(-50%);
-        width: 64px; height: 32px;
-        border-radius: 10px;
+        width: 64px; height: 32px; border-radius: 10px;
         border: 2px solid rgba(255,255,255,0.8);
-        z-index: 6; pointer-events: none;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+        z-index: 6; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,0.4);
       }
 
-      /* ---------- Top HUD ---------- */
-      #hud {
+      /* ---- Bouton retour ---- */
+      #home-btn {
         position: fixed;
-        top: env(safe-area-inset-top, 0px);
-        left: 0; right: 0;
-        display: flex; align-items: center; gap: 12px;
-        padding: 14px 16px 14px 70px;
-        z-index: 8;
+        top: max(10px, env(safe-area-inset-top)); left: 10px;
+        z-index: 20;
+        display: flex; align-items: center; justify-content: center;
+        text-decoration: none; background: rgba(0,0,0,0.6);
+        border: 1px solid rgba(255,255,255,0.15); border-radius: 50%;
+        width: 42px; height: 42px; font-size: 19px; color: #fff;
+      }
+
+      /* ---- HUD complet (joueurs + cible + timer) ---- */
+      #hud {
+        position: fixed; top: 0; left: 0; right: 0;
+        display: flex; flex-direction: column;
+        z-index: 10;
+      }
+
+      /* Bande joueurs (MP) */
+      #players-bar {
+        width: 100%;
+        display: flex; align-items: center; justify-content: space-evenly;
+        padding: max(10px, env(safe-area-inset-top)) 10px 8px 60px;
+        background: rgba(0,0,0,0.7); backdrop-filter: blur(10px);
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        gap: 12px;
+      }
+      .player-chip {
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+        min-width: 44px;
+      }
+      .player-avatar {
+        width: 36px; height: 36px; border-radius: 50%;
+        background: rgba(255,255,255,0.15);
+        border: 2px solid rgba(255,255,255,0.3);
+        font-size: 15px; font-weight: 800;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .player-pname {
+        font-size: 9px; opacity: 0.75; max-width: 44px;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;
+      }
+      .player-dot {
+        width: 10px; height: 10px; border-radius: 50%;
+        background: rgba(255,255,255,0.25);
+        transition: background 0.3s ease, box-shadow 0.3s ease;
+      }
+      .player-dot.done {
+        background: #4ade80;
+        box-shadow: 0 0 8px #4ade80;
+      }
+
+      /* Ligne cible + timer */
+      #hud-game-row {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px 10px 60px;
+        background: rgba(0,0,0,0); /* transparent */
       }
       .target-card {
-        display: flex; align-items: center; gap: 12px;
-        background: rgba(0,0,0,0.5);
-        backdrop-filter: blur(8px);
-        border: 1px solid rgba(255,255,255,0.14);
-        border-radius: 16px;
-        padding: 10px 14px;
-        flex: 1;
+        display: flex; align-items: center; gap: 10px;
+        background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.14); border-radius: 14px;
+        padding: 9px 12px; flex: 1;
       }
-      #target-swatch {
-        width: 46px; height: 46px; border-radius: 10px;
-        border: 2px solid rgba(255,255,255,0.85);
-        flex-shrink: 0;
+      #target-swatch { width: 42px; height: 42px; border-radius: 9px; border: 2px solid rgba(255,255,255,0.85); flex-shrink: 0; }
+      .target-card .label { font-size: 10px; opacity: 0.65; text-transform: uppercase; letter-spacing: 1px; }
+      .target-card .name { font-size: 16px; font-weight: 700; text-transform: capitalize; }
+      .hud-right {
+        text-align: center; line-height: 1.1;
+        background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.14); border-radius: 12px;
+        padding: 8px 12px; min-width: 62px;
       }
-      .target-card .label { font-size: 12px; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; }
-      .target-card .name { font-size: 18px; font-weight: 700; text-transform: capitalize; }
-      .hud-stats { text-align: right; line-height: 1.2; }
-      .hud-stats .big { font-size: 22px; font-weight: 800; }
-      .hud-stats .sub { font-size: 12px; opacity: 0.7; }
+      .hud-right .big { font-size: 24px; font-weight: 800; }
+      .hud-right .sub { font-size: 10px; opacity: 0.65; white-space: nowrap; }
 
-      /* ---------- Capture button ---------- */
+      /* ---- Barre de timer ---- */
+      #timer-bar-wrap {
+        position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 122px);
+        left: 18px; right: 18px; z-index: 8;
+        height: 6px; border-radius: 999px; background: rgba(255,255,255,0.18);
+      }
+      #timer-bar {
+        height: 100%; border-radius: 999px; background: #4ade80;
+        transition: width 1s linear, background 0.5s ease; width: 100%;
+      }
+
+      /* ---- Shutter ---- */
       #shutter {
-        position: fixed;
-        left: 50%;
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
+        position: fixed; left: 50%;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 26px);
         transform: translateX(-50%);
-        width: 84px; height: 84px; border-radius: 50%;
+        width: 82px; height: 82px; border-radius: 50%;
         background: #fff; border: 5px solid rgba(255,255,255,0.5);
         box-shadow: 0 6px 24px rgba(0,0,0,0.45);
-        cursor: pointer; z-index: 8;
-        transition: transform 0.08s ease;
+        cursor: pointer; z-index: 8; transition: transform 0.08s ease;
       }
       #shutter:active { transform: translateX(-50%) scale(0.9); }
-      #shutter:disabled { opacity: 0.4; }
+      #shutter:disabled { opacity: 0.35; }
 
-      /* ---------- Overlays ---------- */
+      /* ---- Overlays génériques ---- */
       .overlay {
-        position: fixed; inset: 0; z-index: 20;
+        position: fixed; inset: 0; z-index: 30;
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
         text-align: center; gap: 18px;
-        padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
-        background: rgba(8, 8, 14, 0.92);
-        backdrop-filter: blur(6px);
+        padding: max(28px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
+        background: rgba(8,8,14,0.93); backdrop-filter: blur(6px);
       }
       .overlay.hidden { display: none; }
-      .overlay h1 { font-size: clamp(30px, 8vw, 52px); letter-spacing: 1px; }
-      .overlay p { font-size: clamp(15px, 4vw, 20px); opacity: 0.85; max-width: 460px; line-height: 1.5; }
+      .overlay h1 { font-size: clamp(28px, 8vw, 50px); letter-spacing: 1px; }
+      .overlay p { font-size: clamp(14px, 4vw, 19px); opacity: 0.85; max-width: 440px; line-height: 1.5; }
       .btn {
         cursor: pointer; border: none; border-radius: 999px;
-        padding: 16px 40px; font-size: 19px; font-weight: 800;
+        padding: 15px 38px; font-size: 18px; font-weight: 800;
         letter-spacing: 1px; text-transform: uppercase;
         background: linear-gradient(180deg, #7c5cff, #5a35e0);
         color: #fff; box-shadow: 0 8px 24px rgba(124,92,255,0.4);
@@ -132,73 +161,176 @@
       }
       .btn:active { transform: scale(0.95); }
 
-      /* Result overlay specifics */
-      #result-photo {
-        width: min(70vw, 320px); aspect-ratio: 1;
-        object-fit: cover; border-radius: 18px;
-        border: 3px solid rgba(255,255,255,0.2);
+      /* ---- Aperçu des 5 couleurs ---- */
+      #preview-swatches {
+        display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;
+        margin: 4px 0;
       }
-      .swatch-row { display: flex; gap: 18px; align-items: stretch; }
+      .preview-chip {
+        display: flex; flex-direction: column; align-items: center; gap: 6px;
+      }
+      .preview-chip .pc-swatch {
+        width: 54px; height: 54px; border-radius: 14px;
+        border: 3px solid rgba(255,255,255,0.8);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      }
+      .preview-chip .pc-num {
+        font-size: 12px; font-weight: 700; opacity: 0.8;
+      }
+      .preview-chip .pc-name {
+        font-size: 10px; opacity: 0.65; text-transform: capitalize; text-align: center; max-width: 60px;
+      }
+
+      /* ---- Reveal couleur avant chaque round ---- */
+      #color-reveal-overlay {
+        position: fixed; inset: 0; z-index: 40;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 18px;
+      }
+      #color-reveal-overlay.hidden { display: none; }
+      #reveal-swatch {
+        width: 110px; height: 110px; border-radius: 22px;
+        border: 5px solid rgba(255,255,255,0.8);
+        box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+      }
+      #reveal-color-name {
+        font-size: clamp(42px, 13vw, 82px);
+        font-weight: 900; color: #fff;
+        text-shadow: 0 4px 28px rgba(0,0,0,0.5);
+        letter-spacing: 2px; text-transform: capitalize;
+      }
+      #reveal-countdown {
+        font-size: clamp(68px, 20vw, 130px);
+        font-weight: 900; color: #fff;
+        text-shadow: 0 6px 36px rgba(0,0,0,0.5);
+        min-height: 1.2em; display: flex; align-items: center; justify-content: center;
+      }
+      @keyframes pop {
+        0%   { transform: scale(1.7); opacity: 0; }
+        45%  { opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      .pop-anim { animation: pop 0.32s ease-out forwards; }
+
+      /* ---- MP wait après photo ---- */
+      .mp-waiting-icon { font-size: 52px; }
+      .mp-sub { font-size: 15px; opacity: 0.75; }
+      #mp-score-photo { width: min(58vw, 240px); height: min(58vw, 240px); object-fit: cover; border-radius: 14px; border: 3px solid rgba(255,255,255,0.2); display: block; }
+
+      /* ---- Reveal scores final ---- */
+      #score-reveal-overlay { justify-content: flex-start; padding-top: max(48px, env(safe-area-inset-top)); gap: 12px; }
+      #reveal-title { font-size: clamp(26px, 7vw, 44px); }
+      #reveal-list { width: 100%; max-width: 400px; flex: 1; overflow-y: auto; }
+      .rp-entry {
+        display: flex; align-items: center; gap: 12px;
+        padding: 12px 16px; border-radius: 14px;
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.1);
+        margin-bottom: 10px;
+        transform: translateY(20px); opacity: 0;
+        transition: transform 0.45s ease, opacity 0.45s ease;
+      }
+      .rp-entry.visible { transform: translateY(0); opacity: 1; }
+      .rp-entry.winner { background: rgba(255,226,122,0.12); border-color: rgba(255,226,122,0.35); }
+      .rp-rank { font-size: 26px; width: 34px; text-align: center; }
+      .rp-name { flex: 1; font-weight: 700; font-size: 15px; text-align: left; }
+      .rp-score { font-size: 20px; font-weight: 900; color: #ffe27a; }
+
+      /* ---- Solo result / end ---- */
+      #result-photo { width: min(68vw, 300px); height: min(68vw, 300px); object-fit: cover; border-radius: 16px; border: 3px solid rgba(255,255,255,0.2); display: block; }
+      .swatch-row { display: flex; gap: 16px; align-items: stretch; }
       .swatch-col { display: flex; flex-direction: column; gap: 6px; align-items: center; }
-      .swatch-col .cap { font-size: 12px; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; }
-      .swatch-box { width: 90px; height: 70px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.7); }
-      .result-rating { font-size: clamp(24px, 7vw, 38px); font-weight: 900; }
-      .result-points { font-size: 22px; font-weight: 700; color: #ffe27a; }
-      .result-de { font-size: 14px; opacity: 0.7; }
-      .end-score { font-size: clamp(40px, 12vw, 72px); font-weight: 900; color: #ffe27a; }
+      .swatch-col .cap { font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; }
+      .swatch-box { width: 86px; height: 66px; border-radius: 11px; border: 2px solid rgba(255,255,255,0.7); }
+      .result-rating { font-size: clamp(22px, 7vw, 36px); font-weight: 900; }
+      .result-points { font-size: 20px; font-weight: 700; color: #ffe27a; }
+      .result-de { font-size: 13px; opacity: 0.7; }
+      .end-score { font-size: clamp(38px, 11vw, 68px); font-weight: 900; color: #ffe27a; }
       .err { color: #ff8a8a; }
+
+      .hidden { display: none !important; }
     </style>
   </head>
   <body>
-    <div id="stage">
-      <video id="cam" autoplay playsinline muted></video>
-      <div id="reticle"></div>
-      <div id="live-chip"></div>
-    </div>
+    <video id="cam" autoplay playsinline muted></video>
+    <div id="reticle"></div>
+    <div id="live-chip"></div>
 
-    <!-- Retour accueil -->
-    <a id="home-btn" href="/" aria-label="Retour à l'accueil">←</a>
+    <a id="home-btn" href="/" aria-label="Retour">←</a>
 
-    <!-- HUD -->
+    <!-- HUD = players bar (MP) + game row -->
     <div id="hud" class="hidden">
-      <div class="target-card">
-        <div id="target-swatch"></div>
-        <div>
-          <div class="label">Trouve cette couleur</div>
-          <div class="name" id="target-name">—</div>
+      <div id="players-bar" class="hidden"></div>
+      <div id="hud-game-row">
+        <div class="target-card">
+          <div id="target-swatch"></div>
+          <div>
+            <div class="label">Cible</div>
+            <div class="name" id="target-name">—</div>
+          </div>
+        </div>
+        <div class="hud-right">
+          <div class="big" id="hud-timer">30</div>
+          <div class="sub"><span id="hud-round">1</span>/<span id="hud-total">5</span></div>
         </div>
       </div>
-      <div class="hud-stats">
-        <div class="big"><span id="hud-score">0</span></div>
-        <div class="sub">Manche <span id="hud-round">1</span>/<span id="hud-total">5</span></div>
-      </div>
     </div>
 
-    <button id="shutter" class="hidden" aria-label="Prendre la photo"></button>
+    <!-- Timer bar -->
+    <div id="timer-bar-wrap" class="hidden"><div id="timer-bar"></div></div>
 
-    <!-- Start -->
+    <!-- Shutter -->
+    <button id="shutter" class="hidden" aria-label="Photo"></button>
+
+    <!-- Aperçu des 5 couleurs (MP, au début) -->
+    <div id="color-preview-overlay" class="overlay hidden">
+      <h1 id="preview-title">🎨 Les 5 cibles</h1>
+      <p id="preview-sub">Cherche ces couleurs autour de toi !</p>
+      <div id="preview-swatches"></div>
+      <p id="preview-countdown" style="font-size:32px;font-weight:900;opacity:0.85;">Début dans <span id="preview-secs">5</span>s</p>
+    </div>
+
+    <!-- Reveal couleur (avant chaque round) -->
+    <div id="color-reveal-overlay" class="hidden">
+      <div id="reveal-swatch"></div>
+      <div id="reveal-color-name">—</div>
+      <div id="reveal-countdown"></div>
+    </div>
+
+    <!-- Solo: start -->
     <div id="start-overlay" class="overlay">
       <h1>🎨 Color Hunt</h1>
-      <p>
-        Une couleur s'affiche. Pointe ta caméra vers un objet de cette
-        couleur, centre-le dans le cadre et prends la photo. Plus c'est
-        précis, plus tu marques de points !
-      </p>
+      <p>Une couleur s'affiche. Pointe ta caméra vers quelque chose de cette couleur et prends la photo. Plus c'est précis et rapide, plus tu marques de points !</p>
       <button id="start-btn" class="btn">Activer la caméra</button>
     </div>
 
-    <!-- Result -->
+    <!-- MP: attente connexion -->
+    <div id="mp-wait-overlay" class="overlay hidden">
+      <div class="mp-waiting-icon">📡</div>
+      <h1>En attente…</h1>
+      <p id="mp-wait-msg" class="mp-sub">Connexion…</p>
+    </div>
+
+    <!-- MP: photo prise, attente des autres -->
+    <div id="mp-score-wait-overlay" class="overlay hidden">
+      <canvas id="mp-score-photo"></canvas>
+      <h1>📷 Photo prise !</h1>
+      <p id="mp-score-wait-msg" class="mp-sub">En attente des autres…</p>
+    </div>
+
+    <!-- Reveal scores final (MP) -->
+    <div id="score-reveal-overlay" class="overlay hidden">
+      <h1 id="reveal-title">🏆 Résultats</h1>
+      <div id="reveal-list"></div>
+      <button id="reveal-continue-btn" class="btn hidden">Retour au lobby →</button>
+    </div>
+
+    <!-- Solo: résultat -->
     <div id="result-overlay" class="overlay hidden">
       <canvas id="result-photo"></canvas>
       <div class="swatch-row">
-        <div class="swatch-col">
-          <div class="cap">Cible</div>
-          <div class="swatch-box" id="res-target"></div>
-        </div>
-        <div class="swatch-col">
-          <div class="cap">Ta couleur</div>
-          <div class="swatch-box" id="res-captured"></div>
-        </div>
+        <div class="swatch-col"><div class="cap">Cible</div><div class="swatch-box" id="res-target"></div></div>
+        <div class="swatch-col"><div class="cap">Ta couleur</div><div class="swatch-box" id="res-captured"></div></div>
       </div>
       <div class="result-rating" id="res-rating">—</div>
       <div class="result-points" id="res-points">+0 pts</div>
@@ -206,7 +338,7 @@
       <button id="next-btn" class="btn">Manche suivante</button>
     </div>
 
-    <!-- End -->
+    <!-- Solo: fin -->
     <div id="end-overlay" class="overlay hidden">
       <h1>🏁 Terminé !</h1>
       <div class="end-score" id="end-score">0</div>
@@ -214,11 +346,11 @@
       <button id="replay-btn" class="btn">Rejouer</button>
     </div>
 
-    <!-- Error -->
+    <!-- Erreur -->
     <div id="error-overlay" class="overlay hidden">
       <h1>📷</h1>
       <p class="err" id="error-msg">Impossible d'accéder à la caméra.</p>
-      <p>Autorise la caméra dans ton navigateur, puis réessaie. Sur mobile, le site doit être en HTTPS.</p>
+      <p>Autorise la caméra dans ton navigateur, puis réessaie.</p>
       <button id="retry-btn" class="btn">Réessayer</button>
     </div>
 
