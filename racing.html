@@ -235,46 +235,71 @@
         {
           id: 'prairie', name: 'Prairie', emoji: '🌳',
           desc: 'Le grand 8 ! Une grande boucle et une petite, reliées par un pont central.',
-          mode: 'eight', scale: 1, trackW: 150,
+          mode: 'eight', scale: 2.5, trackW: 150,
           theme: { ground: '#1f5a2e', road: '#33373f', edge: '#e23b3b', edge2: '#ffffff', line: 'rgba(255,220,90,0.6)', deco: 'tree', card: '#1f5a2e' },
           obstacles: [],
         },
         {
           id: 'desert', name: 'Désert', emoji: '🏜️',
-          desc: 'Grand circuit large et rapide, longues courbes. Sable, huile, barils, rochers.',
+          desc: 'Un grand circuit en serpentin : longues lignes droites et larges virages en épingle dans le sable.',
           mode: 'waypoints', scale: 1, trackW: 162,
           theme: { ground: '#c8a85a', road: '#3a352e', edge: '#b9863f', edge2: '#efe2bf', line: 'rgba(255,255,255,0.5)', deco: 'cactus', card: '#c8a85a' },
           waypoints: [
-            [-500, -150], [-120, -270], [280, -250], [520, -90], [540, 120],
-            [300, 230], [-120, 270], [-500, 200], [-600, 30],
+            // Grande ligne droite du haut (départ), vers la droite
+            [-750, -1200], [-609, -1200], [-468, -1200], [-327, -1200], [-186, -1200], [-45, -1200],
+            [95, -1200], [236, -1200], [377, -1200], [518, -1200], [659, -1200], [800, -1200],
+            // Grande épingle à droite, descente vers le couloir supérieur
+            [937, -1176], [1057, -1106], [1146, -1000], [1194, -869], [1194, -731], [1146, -600],
+            [1057, -494], [937, -424], [800, -400],
+            // Couloir supérieur, retour vers la gauche
+            [663, -400], [525, -400], [388, -400], [250, -400], [113, -400], [-25, -400],
+            [-162, -400], [-300, -400],
+            // Grande épingle à gauche, descente vers le couloir central
+            [-437, -376], [-557, -306], [-646, -200], [-694, -69], [-694, 69], [-646, 200],
+            [-557, 306], [-437, 376], [-300, 400],
+            // Couloir central, vers la droite
+            [-162, 400], [-25, 400], [113, 400], [250, 400], [388, 400], [525, 400], [663, 400], [800, 400],
+            // Grande épingle à droite, descente vers le couloir du bas
+            [937, 424], [1057, 494], [1146, 600], [1194, 731], [1194, 869], [1146, 1000],
+            [1057, 1106], [937, 1176], [800, 1200],
+            // Couloir du bas, retour vers la gauche
+            [659, 1200], [518, 1200], [377, 1200], [236, 1200], [95, 1200], [-45, 1200],
+            [-186, 1200], [-327, 1200], [-468, 1200], [-609, 1200], [-750, 1200],
+            // Virage arrondi en bas à gauche
+            [-903, 1170], [-1033, 1083], [-1120, 953],
+            // Grande ligne droite de remontée
+            [-1150, 800], [-1150, 655], [-1150, 509], [-1150, 364], [-1150, 218], [-1150, 73],
+            [-1150, -73], [-1150, -218], [-1150, -364], [-1150, -509], [-1150, -655], [-1150, -800],
+            // Virage arrondi en haut à gauche (retour vers le départ)
+            [-1120, -953], [-1033, -1083], [-903, -1170],
           ],
-          obstacles: [
-            { frac: 0.12, lane: 1.4, type: 'sand' },
-            { frac: 0.26, lane: -1.3, type: 'sand' },
-            { frac: 0.40, lane: 0.5, type: 'oil' },
-            { frac: 0.58, lane: 1.4, type: 'sand' },
-            { frac: 0.72, lane: -1.4, type: 'barrel' },
-            { frac: 0.85, lane: 1.6, type: 'rock' },
-            { frac: 0.95, lane: -0.4, type: 'cone' },
-          ],
+          fences: true,
+          obstacles: [],
         },
         {
           id: 'neige', name: 'Neige', emoji: '❄️',
-          desc: 'Circuit technique et tout en hauteur. Très glissant : plaques de glace, bonhommes de neige.',
+          desc: 'Le huit glacé ! Une grande boucle en haut, une petite en bas, qui se croisent par un pont. Très glissant.',
           mode: 'waypoints', scale: 1, trackW: 150,
           theme: { ground: '#e6edf5', road: '#3c4350', edge: '#9bb6d6', edge2: '#ffffff', line: 'rgba(180,210,255,0.7)', deco: 'pine', card: '#aac4e0' },
+          // Huit asymétrique : grande boucle large en haut, petite boucle en bas,
+          // qui se croisent une seule fois au centre (0,0) -> pont/embranchement.
           waypoints: [
-            [0, -400], [250, -330], [340, -120], [230, 110], [320, 340],
-            [60, 430], [-220, 360], [-330, 120], [-250, -110], [-330, -320],
+            [305, -534], [678, -417], [660, -271], [439, -151], [192, -64],
+            [0, 0], [-134, 70], [-222, 132], [-255, 195], [-215, 259],
+            [-87, 306], [87, 306], [215, 259], [255, 195], [222, 132],
+            [134, 70], [0, 0], [-192, -64], [-439, -151], [-660, -271],
+            [-678, -417], [-305, -534],
           ],
+          fences: true,
           obstacles: [
-            { frac: 0.10, lane: 1.2, type: 'ice' },
-            { frac: 0.24, lane: -1.2, type: 'ice' },
-            { frac: 0.37, lane: 0.4, type: 'ice' },
-            { frac: 0.55, lane: -1.3, type: 'snowman' },
-            { frac: 0.70, lane: 1.3, type: 'ice' },
-            { frac: 0.84, lane: -1.5, type: 'snowman' },
-            { frac: 0.95, lane: 0.4, type: 'cone' },
+            { frac: 0.06, lane: 1.2, type: 'ice' },
+            { frac: 0.13, lane: -0.8, type: 'ice' },
+            { frac: 0.34, lane: 0.6, type: 'ice' },
+            { frac: 0.45, lane: -1.3, type: 'snowman' },
+            { frac: 0.58, lane: 1.2, type: 'ice' },
+            { frac: 0.66, lane: -0.6, type: 'cone' },
+            { frac: 0.80, lane: -1.4, type: 'snowman' },
+            { frac: 0.90, lane: 0.5, type: 'ice' },
           ],
         },
       ];
@@ -289,6 +314,7 @@
           case 'barrel': return { solid: true, r: 20 };
           case 'cone': return { solid: true, r: 14 };
           case 'snowman': return { solid: true, r: 28 };
+          case 'barrier': return { solid: true, r: 9 };
           case 'sign': return { solid: false, slow: 1, r: 0, decoOnly: true };
           default: return { solid: false, slow: 1, r: 30 };
         }
@@ -348,7 +374,7 @@
 
       function buildTrack(map) {
         let pts;
-        if (map.mode === 'eight') pts = centerlineEight(420);
+        if (map.mode === 'eight') pts = centerlineEight(420).map((p) => [p[0] * map.scale, p[1] * map.scale]);
         else if (map.mode === 'lissajous') pts = centerlineLissajous(380);
         else pts = centerlineFromWaypoints(map.waypoints.map((p) => [p[0] * map.scale, p[1] * map.scale]), 24);
         const N = pts.length;
@@ -413,6 +439,33 @@
           const nx = -dirs[idx][1], ny = dirs[idx][0];
           const p = obsProps(o.type);
           obstacles.push(Object.assign({ x: pts[idx][0] + nx * o.lane * LANE_PX, y: pts[idx][1] + ny * o.lane * LANE_PX, type: o.type }, p));
+        }
+
+        // Barrières latérales : un muret continu de chaque côté pour empêcher
+        // de couper à travers le sable. Posées par longueur d'arc le long de la
+        // ligne centrale, décalées juste à l'extérieur du bord de piste.
+        if (map.fences) {
+          const off = half + 18;     // un peu en dehors de l'asphalte
+          const step = 24;           // espacement (< diamètre voiture => infranchissable)
+          const bp = obsProps('barrier');
+          let acc = step;            // pose un poteau dès le premier point
+          for (let i = 0; i < N; i++) {
+            const a = pts[i], b = pts[(i + 1) % N];
+            acc += Math.hypot(b[0] - a[0], b[1] - a[1]);
+            if (acc < step) continue;
+            acc = 0;
+            const nx = -dirs[i][1], ny = dirs[i][0];
+            for (const side of [-1, 1]) {
+              const px = pts[i][0] + nx * off * side, py = pts[i][1] + ny * off * side;
+              // dans un virage serré le décalage intérieur peut « se replier »
+              // et retomber sur la piste : on rejette ces poteaux mal placés.
+              let onRoad = false;
+              for (let k = 0; k < N; k += 2) {
+                if (Math.hypot(px - pts[k][0], py - pts[k][1]) < half + 8) { onRoad = true; break; }
+              }
+              if (!onRoad) obstacles.push(Object.assign({ x: px, y: py, type: 'barrier' }, bp));
+            }
+          }
         }
 
         T = { map, pts, N, dirs, curv, len, avgSeg: len / N, half, crossings, branch, deco, obstacles, startDir: dirs[0][2], theme: map.theme };
@@ -746,6 +799,7 @@
           else if (type === 'barrel') { ctx.fillStyle = 'rgba(0,0,0,0.3)'; fillC(2, 4, r); ctx.fillStyle = '#c23b2f'; fillC(0, 0, r); ctx.strokeStyle = '#7a1f17'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, r * 0.6, 0, Math.PI * 2); ctx.stroke(); }
           else if (type === 'cone') { ctx.fillStyle = '#f08a24'; ctx.beginPath(); ctx.moveTo(0, -r * 1.3); ctx.lineTo(-r, r); ctx.lineTo(r, r); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(-r * 0.7, -r * 0.1, r * 1.4, r * 0.35); }
           else if (type === 'snowman') { ctx.fillStyle = 'rgba(0,0,0,0.25)'; fillE(3, r * 0.7, r, r * 0.4); ctx.fillStyle = '#fff'; fillC(0, r * 0.4, r * 0.7); fillC(0, -r * 0.45, r * 0.5); ctx.fillStyle = '#222'; fillC(-r * 0.15, -r * 0.5, 2.4); fillC(r * 0.15, -r * 0.5, 2.4); ctx.fillStyle = '#f08a24'; ctx.beginPath(); ctx.moveTo(0, -r * 0.42); ctx.lineTo(r * 0.5, -r * 0.36); ctx.lineTo(0, -r * 0.3); ctx.closePath(); ctx.fill(); }
+          else if (type === 'barrier') { ctx.fillStyle = 'rgba(0,0,0,0.28)'; fillC(1.5, 2.5, r); ctx.fillStyle = '#d23b2f'; fillC(0, 0, r); ctx.fillStyle = '#fff'; fillC(-r * 0.3, -r * 0.3, r * 0.42); }
           else if (type === 'sign') {
             // median sign at the fork
             ctx.fillStyle = '#444'; ctx.fillRect(-3, 0, 6, 26);
