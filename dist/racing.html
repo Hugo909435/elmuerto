@@ -185,24 +185,10 @@
       const MAPS = [
         {
           id: 'prairie', name: 'Prairie', emoji: '🌳',
-          desc: 'Circuit équilibré avec un embranchement : intérieur ou extérieur du terre-plein.',
-          mode: 'waypoints', scale: 1.7, trackW: 150,
+          desc: 'Le grand 8 ! Une grande boucle et une petite, reliées par un pont central.',
+          mode: 'eight', scale: 1, trackW: 150,
           theme: { ground: '#1f5a2e', road: '#33373f', edge: '#e23b3b', edge2: '#ffffff', line: 'rgba(255,220,90,0.6)', deco: 'tree', card: '#1f5a2e' },
-          waypoints: [
-            [0, -300], [280, -280], [430, -110], [360, 130], [490, 300],
-            [250, 410], [0, 360], [-260, 410], [-470, 250], [-360, 0],
-            [-480, -200], [-220, -330],
-          ],
-          fork: { from: 0.02, to: 0.16, offset: 250 },
-          obstacles: [
-            { frac: 0.09, lane: 4, type: 'sign' },
-            { frac: 0.32, lane: -1.4, type: 'mud' },
-            { frac: 0.52, lane: 1.3, type: 'mud' },
-            { frac: 0.66, lane: -0.4, type: 'oil' },
-            { frac: 0.43, lane: 1.9, type: 'rock' },
-            { frac: 0.86, lane: -1.9, type: 'rock' },
-            { frac: 0.95, lane: 0.5, type: 'cone' },
-          ],
+          obstacles: [],
         },
         {
           id: 'desert', name: 'Désert', emoji: '🏜️',
@@ -280,12 +266,13 @@
         return pts;
       }
       function centerlineEight(N) {
-        // lemniscate of Gerono-ish: smooth figure 8 crossing at centre
-        const pts = []; const A = 470, B = 300;
+        // asymmetric figure 8: one big lobe + one small lobe, crossing at centre
+        const pts = []; const A = 600, B = 400, e = 0.42;
         for (let k = 0; k < N; k++) {
           const t = (k / N) * Math.PI * 2;
           const d = 1 + Math.sin(t) * Math.sin(t);
-          pts.push([A * Math.cos(t) / d, B * 2 * Math.sin(t) * Math.cos(t) / d]);
+          const s = 1 + e * Math.cos(t); // >1 on the big (right) lobe, <1 on the small (left) lobe
+          pts.push([A * Math.cos(t) / d * s, B * 2 * Math.sin(t) * Math.cos(t) / d * s]);
         }
         return pts;
       }
@@ -312,7 +299,7 @@
 
       function buildTrack(map) {
         let pts;
-        if (map.mode === 'eight') pts = centerlineEight(360);
+        if (map.mode === 'eight') pts = centerlineEight(420);
         else if (map.mode === 'lissajous') pts = centerlineLissajous(380);
         else pts = centerlineFromWaypoints(map.waypoints.map((p) => [p[0] * map.scale, p[1] * map.scale]), 24);
         const N = pts.length;
@@ -645,18 +632,17 @@
         ctx.setLineDash([24, 26]); strokePolyline(b, 4, th.line); ctx.setLineDash([]);
       }
 
+      // Flat, clean X-junction at each self-crossing: cover the kerb lines that
+      // would otherwise cut across the intersection, then redraw the centre dashes.
       function drawOverpasses() {
         const th = T.theme, w = T.half * 2;
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
         for (const c of T.crossings) {
-          const idxs = rangeIdx(c.over, 9);
-          // drop shadow of the bridge onto the lower road
-          pathLoop(T.pts, idxs, false); ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(0,0,0,0.32)'; ctx.lineWidth = w + 30; ctx.stroke();
-          // bridge deck (raised road)
-          strokeRoad(idxs, false, true);
-          // railings (offset polylines)
-          const railL = [], railR = [];
-          for (const i of idxs) { const nx = -T.dirs[i][1], ny = T.dirs[i][0]; railL.push([T.pts[i][0] + nx * (T.half + 6), T.pts[i][1] + ny * (T.half + 6)]); railR.push([T.pts[i][0] - nx * (T.half + 6), T.pts[i][1] - ny * (T.half + 6)]); }
-          strokePolyline(railL, 6, 'rgba(255,255,255,0.85)'); strokePolyline(railR, 6, 'rgba(255,255,255,0.85)');
+          const strands = [rangeIdx(c.i, 7), rangeIdx(c.j, 7)];
+          // asphalt patch over both strands -> swallows the red/white kerbs through the junction
+          for (const idxs of strands) { pathLoop(T.pts, idxs, false); ctx.strokeStyle = th.road; ctx.lineWidth = w + 18; ctx.stroke(); }
+          // redraw the dashed centre line across the junction
+          for (const idxs of strands) { pathLoop(T.pts, idxs, false); ctx.strokeStyle = th.line; ctx.lineWidth = 4; ctx.setLineDash([24, 26]); ctx.stroke(); ctx.setLineDash([]); }
         }
       }
 

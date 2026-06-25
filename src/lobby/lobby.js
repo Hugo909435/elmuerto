@@ -284,6 +284,7 @@ net
       rouletteMsg.textContent = `${picker ? escapeHtml(picker.name) : 'L\'hôte'} choisit le mini-jeu…`;
     }
   })
+<<<<<<< HEAD
 
   .on('spin-result', m => {
     // Désactiver toutes les cartes
@@ -298,6 +299,26 @@ net
       const pid = state.playerId || loadPid();
       window.location.href = `${game.url}?room=${encodeURIComponent(state.code)}&pid=${encodeURIComponent(pid)}`;
     }, 900);
+=======
+  .on('spin-result', (m) => {
+    // Résultat imposé par le serveur : identique pour tous les clients.
+    spinBtn.classList.add('hidden');
+    rouletteMsg.textContent = 'La roue tourne…';
+    roulette.spinTo(m.resultIndex).then(() => {
+      const game = state.wheel[m.resultIndex];
+      rouletteMsg.textContent = `${game.emoji || ''} ${game.label} ! On y va…`;
+      setTimeout(() => {
+        // On passe l'identité (room + playerId + pseudo) pour que le mini-jeu
+        // puisse se reconnecter au même salon et faire jouer tout le monde
+        // ensemble (cf. multijoueur de la course).
+        const nm = loadName();
+        window.location.href =
+          `${game.url}?room=${encodeURIComponent(state.code)}` +
+          `&pid=${encodeURIComponent(state.playerId)}` +
+          `&name=${encodeURIComponent(nm)}`;
+      }, 1200);
+    });
+>>>>>>> 7409af55c593a31c2d69fb7cbca1dc6c8b846511
   })
 
   .on('waiting-return', m => {

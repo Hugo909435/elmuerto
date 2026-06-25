@@ -105,6 +105,28 @@
       .map-card .mc-emoji { font-size: 26px; }
       .map-card .mc-name { font-size: 20px; font-weight: 800; letter-spacing: 1px; }
       .map-card .mc-desc { font-size: 12.5px; opacity: 0.88; line-height: 1.35; margin-top: 5px; }
+
+      /* ----- Salle d'attente multijoueur ----- */
+      #mp-players { list-style: none; padding: 0; margin: 4px 0 10px; width: min(92vw, 420px); }
+      #mp-players .player {
+        display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+        background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px; margin-bottom: 8px; text-align: left;
+      }
+      #mp-players .dot { width: 11px; height: 11px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+      #mp-players .pname { flex: 1; font-weight: 700; }
+      #mp-players .badge {
+        font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+        padding: 3px 10px; border-radius: 999px; background: rgba(74, 222, 128, 0.18); color: #4ade80;
+      }
+      #mp-players .off { font-size: 11px; opacity: 0.5; font-style: italic; }
+      #mp-maps { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; max-width: 760px; }
+      #mp-maps .map-card { outline-offset: 2px; }
+      #mp-error {
+        position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+        background: #b91c1c; color: #fff; padding: 12px 22px; border-radius: 12px;
+        font-size: 14px; font-weight: 600; z-index: 100; max-width: 90vw; text-align: center;
+      }
     </style>
   </head>
   <body>
@@ -165,6 +187,16 @@
       <button id="back-wheel-btn" class="btn" style="display:none;margin-top:10px;background:linear-gradient(180deg,#4ade80,#22a85a);color:#05290f;">Retour à la roue 🎰</button>
     </div>
 
+    <!-- Salle d'attente multijoueur (course à plusieurs depuis le lobby) -->
+    <div id="mp-overlay" class="overlay hidden">
+      <h1>🏎️ Course du salon</h1>
+      <p id="mp-sub">Connexion à la salle d'attente…</p>
+      <ul id="mp-players"></ul>
+      <div id="mp-maps"></div>
+      <button id="mp-start" class="btn hidden" style="margin-top:6px">Lancer la course 🏁</button>
+      <p id="mp-wait" class="hidden" style="opacity:.7">En attente que l'hôte lance la course…</p>
+    </div>
+
     <script>
       'use strict';
       const canvas = document.getElementById('game');
@@ -181,66 +213,94 @@
       resize();
 
       // ====================================================================
+      //  MULTIJOUEUR — identité transmise par le lobby via l'URL
+      // ====================================================================
+      const params = new URLSearchParams(location.search);
+      const ROOM = params.get('room') || '';
+      const MY_PID = params.get('pid') || '';
+      const MY_NAME = params.get('name') || '';
+      let MP = !!ROOM;            // mode multijoueur actif ?
+      let net = null;            // client WebSocket (créé dans mpInit)
+      let myId = null;           // mon identifiant de joueur (reçu du serveur)
+      let isHost = false;        // suis-je l'hôte du salon ?
+      let raceMapIndex = 0;      // circuit choisi par l'hôte
+      const peers = new Map();   // id -> voiture distante (interpolée)
+      // 8 couleurs / placements de départ pour jusqu'à 8 joueurs.
+      const MP_COLORS = ['#4ade80', '#ef4444', '#3b82f6', '#f59e0b', '#a855f7', '#ec4899', '#14b8a6', '#f97316'];
+      const MP_LANES = [-1.2, -0.4, 0.4, 1.2, -1.2, -0.4, 0.4, 1.2];
+
+      // ====================================================================
       //  MAPS  (3 distinct layouts, 2 self-crossing)
       // ====================================================================
       const MAPS = [
         {
           id: 'prairie', name: 'Prairie', emoji: '🌳',
-          desc: 'Circuit équilibré avec un embranchement : intérieur ou extérieur du terre-plein.',
-          mode: 'waypoints', scale: 1.7, trackW: 150,
+          desc: 'Le grand 8 ! Une grande boucle et une petite, reliées par un pont central.',
+          mode: 'eight', scale: 2.5, trackW: 150,
           theme: { ground: '#1f5a2e', road: '#33373f', edge: '#e23b3b', edge2: '#ffffff', line: 'rgba(255,220,90,0.6)', deco: 'tree', card: '#1f5a2e' },
-          waypoints: [
-            [0, -300], [280, -280], [430, -110], [360, 130], [490, 300],
-            [250, 410], [0, 360], [-260, 410], [-470, 250], [-360, 0],
-            [-480, -200], [-220, -330],
-          ],
-          fork: { from: 0.02, to: 0.16, offset: 250 },
-          obstacles: [
-            { frac: 0.09, lane: 4, type: 'sign' },
-            { frac: 0.32, lane: -1.4, type: 'mud' },
-            { frac: 0.52, lane: 1.3, type: 'mud' },
-            { frac: 0.66, lane: -0.4, type: 'oil' },
-            { frac: 0.43, lane: 1.9, type: 'rock' },
-            { frac: 0.86, lane: -1.9, type: 'rock' },
-            { frac: 0.95, lane: 0.5, type: 'cone' },
-          ],
+          obstacles: [],
         },
         {
           id: 'desert', name: 'Désert', emoji: '🏜️',
-          desc: 'Grand circuit large et rapide, longues courbes. Sable, huile, barils, rochers.',
+          desc: 'Un grand circuit en serpentin : longues lignes droites et larges virages en épingle dans le sable.',
           mode: 'waypoints', scale: 1, trackW: 162,
           theme: { ground: '#c8a85a', road: '#3a352e', edge: '#b9863f', edge2: '#efe2bf', line: 'rgba(255,255,255,0.5)', deco: 'cactus', card: '#c8a85a' },
           waypoints: [
-            [-500, -150], [-120, -270], [280, -250], [520, -90], [540, 120],
-            [300, 230], [-120, 270], [-500, 200], [-600, 30],
+            // Grande ligne droite du haut (départ), vers la droite
+            [-750, -1200], [-609, -1200], [-468, -1200], [-327, -1200], [-186, -1200], [-45, -1200],
+            [95, -1200], [236, -1200], [377, -1200], [518, -1200], [659, -1200], [800, -1200],
+            // Grande épingle à droite, descente vers le couloir supérieur
+            [937, -1176], [1057, -1106], [1146, -1000], [1194, -869], [1194, -731], [1146, -600],
+            [1057, -494], [937, -424], [800, -400],
+            // Couloir supérieur, retour vers la gauche
+            [663, -400], [525, -400], [388, -400], [250, -400], [113, -400], [-25, -400],
+            [-162, -400], [-300, -400],
+            // Grande épingle à gauche, descente vers le couloir central
+            [-437, -376], [-557, -306], [-646, -200], [-694, -69], [-694, 69], [-646, 200],
+            [-557, 306], [-437, 376], [-300, 400],
+            // Couloir central, vers la droite
+            [-162, 400], [-25, 400], [113, 400], [250, 400], [388, 400], [525, 400], [663, 400], [800, 400],
+            // Grande épingle à droite, descente vers le couloir du bas
+            [937, 424], [1057, 494], [1146, 600], [1194, 731], [1194, 869], [1146, 1000],
+            [1057, 1106], [937, 1176], [800, 1200],
+            // Couloir du bas, retour vers la gauche
+            [659, 1200], [518, 1200], [377, 1200], [236, 1200], [95, 1200], [-45, 1200],
+            [-186, 1200], [-327, 1200], [-468, 1200], [-609, 1200], [-750, 1200],
+            // Virage arrondi en bas à gauche
+            [-903, 1170], [-1033, 1083], [-1120, 953],
+            // Grande ligne droite de remontée
+            [-1150, 800], [-1150, 655], [-1150, 509], [-1150, 364], [-1150, 218], [-1150, 73],
+            [-1150, -73], [-1150, -218], [-1150, -364], [-1150, -509], [-1150, -655], [-1150, -800],
+            // Virage arrondi en haut à gauche (retour vers le départ)
+            [-1120, -953], [-1033, -1083], [-903, -1170],
           ],
-          obstacles: [
-            { frac: 0.12, lane: 1.4, type: 'sand' },
-            { frac: 0.26, lane: -1.3, type: 'sand' },
-            { frac: 0.40, lane: 0.5, type: 'oil' },
-            { frac: 0.58, lane: 1.4, type: 'sand' },
-            { frac: 0.72, lane: -1.4, type: 'barrel' },
-            { frac: 0.85, lane: 1.6, type: 'rock' },
-            { frac: 0.95, lane: -0.4, type: 'cone' },
-          ],
+          fences: true,
+          obstacles: [],
         },
         {
           id: 'neige', name: 'Neige', emoji: '❄️',
-          desc: 'Circuit technique et tout en hauteur. Très glissant : plaques de glace, bonhommes de neige.',
+          desc: 'Le huit glacé ! Une grande boucle en haut, une petite en bas, qui se croisent par un pont. Très glissant.',
           mode: 'waypoints', scale: 1, trackW: 150,
           theme: { ground: '#e6edf5', road: '#3c4350', edge: '#9bb6d6', edge2: '#ffffff', line: 'rgba(180,210,255,0.7)', deco: 'pine', card: '#aac4e0' },
+          // Huit asymétrique : grande boucle large en haut, petite boucle en bas,
+          // qui se croisent une seule fois au centre (0,0) -> pont/embranchement.
           waypoints: [
-            [0, -400], [250, -330], [340, -120], [230, 110], [320, 340],
-            [60, 430], [-220, 360], [-330, 120], [-250, -110], [-330, -320],
+            [305, -534], [678, -417], [660, -271], [439, -151], [192, -64],
+            [0, 0], [-134, 70], [-222, 132], [-255, 195], [-215, 259],
+            [-87, 306], [87, 306], [215, 259], [255, 195], [222, 132],
+            [134, 70], [0, 0], [-192, -64], [-439, -151], [-660, -271],
+            [-678, -417], [-305, -534],
           ],
+          fences: true,
           obstacles: [
-            { frac: 0.10, lane: 1.2, type: 'ice' },
-            { frac: 0.24, lane: -1.2, type: 'ice' },
-            { frac: 0.37, lane: 0.4, type: 'ice' },
-            { frac: 0.55, lane: -1.3, type: 'snowman' },
-            { frac: 0.70, lane: 1.3, type: 'ice' },
-            { frac: 0.84, lane: -1.5, type: 'snowman' },
-            { frac: 0.95, lane: 0.4, type: 'cone' },
+            { frac: 0.06, lane: 1.2, type: 'ice' },
+            { frac: 0.13, lane: -0.8, type: 'ice' },
+            { frac: 0.34, lane: 0.6, type: 'ice' },
+            { frac: 0.45, lane: -1.3, type: 'snowman' },
+            { frac: 0.58, lane: 1.2, type: 'ice' },
+            { frac: 0.66, lane: -0.6, type: 'cone' },
+            { frac: 0.80, lane: -1.4, type: 'snowman' },
+            { frac: 0.90, lane: 0.5, type: 'ice' },
           ],
         },
       ];
@@ -255,6 +315,7 @@
           case 'barrel': return { solid: true, r: 20 };
           case 'cone': return { solid: true, r: 14 };
           case 'snowman': return { solid: true, r: 28 };
+          case 'barrier': return { solid: true, r: 9 };
           case 'sign': return { solid: false, slow: 1, r: 0, decoOnly: true };
           default: return { solid: false, slow: 1, r: 30 };
         }
@@ -281,12 +342,13 @@
         return pts;
       }
       function centerlineEight(N) {
-        // lemniscate of Gerono-ish: smooth figure 8 crossing at centre
-        const pts = []; const A = 470, B = 300;
+        // asymmetric figure 8: one big lobe + one small lobe, crossing at centre
+        const pts = []; const A = 600, B = 400, e = 0.42;
         for (let k = 0; k < N; k++) {
           const t = (k / N) * Math.PI * 2;
           const d = 1 + Math.sin(t) * Math.sin(t);
-          pts.push([A * Math.cos(t) / d, B * 2 * Math.sin(t) * Math.cos(t) / d]);
+          const s = 1 + e * Math.cos(t); // >1 on the big (right) lobe, <1 on the small (left) lobe
+          pts.push([A * Math.cos(t) / d * s, B * 2 * Math.sin(t) * Math.cos(t) / d * s]);
         }
         return pts;
       }
@@ -313,7 +375,7 @@
 
       function buildTrack(map) {
         let pts;
-        if (map.mode === 'eight') pts = centerlineEight(360);
+        if (map.mode === 'eight') pts = centerlineEight(420).map((p) => [p[0] * map.scale, p[1] * map.scale]);
         else if (map.mode === 'lissajous') pts = centerlineLissajous(380);
         else pts = centerlineFromWaypoints(map.waypoints.map((p) => [p[0] * map.scale, p[1] * map.scale]), 24);
         const N = pts.length;
@@ -378,6 +440,33 @@
           const nx = -dirs[idx][1], ny = dirs[idx][0];
           const p = obsProps(o.type);
           obstacles.push(Object.assign({ x: pts[idx][0] + nx * o.lane * LANE_PX, y: pts[idx][1] + ny * o.lane * LANE_PX, type: o.type }, p));
+        }
+
+        // Barrières latérales : un muret continu de chaque côté pour empêcher
+        // de couper à travers le sable. Posées par longueur d'arc le long de la
+        // ligne centrale, décalées juste à l'extérieur du bord de piste.
+        if (map.fences) {
+          const off = half + 18;     // un peu en dehors de l'asphalte
+          const step = 24;           // espacement (< diamètre voiture => infranchissable)
+          const bp = obsProps('barrier');
+          let acc = step;            // pose un poteau dès le premier point
+          for (let i = 0; i < N; i++) {
+            const a = pts[i], b = pts[(i + 1) % N];
+            acc += Math.hypot(b[0] - a[0], b[1] - a[1]);
+            if (acc < step) continue;
+            acc = 0;
+            const nx = -dirs[i][1], ny = dirs[i][0];
+            for (const side of [-1, 1]) {
+              const px = pts[i][0] + nx * off * side, py = pts[i][1] + ny * off * side;
+              // dans un virage serré le décalage intérieur peut « se replier »
+              // et retomber sur la piste : on rejette ces poteaux mal placés.
+              let onRoad = false;
+              for (let k = 0; k < N; k += 2) {
+                if (Math.hypot(px - pts[k][0], py - pts[k][1]) < half + 8) { onRoad = true; break; }
+              }
+              if (!onRoad) obstacles.push(Object.assign({ x: px, y: py, type: 'barrier' }, bp));
+            }
+          }
         }
 
         T = { map, pts, N, dirs, curv, len, avgSeg: len / N, half, crossings, branch, deco, obstacles, startDir: dirs[0][2], theme: map.theme };
@@ -510,7 +599,7 @@
           const lapTime = raceTime - lapStartTime;
           if (lapTime < bestLap) bestLap = lapTime;
           lapStartTime = raceTime;
-          if (player.lap >= LAPS && !player.finished) { player.finished = true; player.finishTime = raceTime; finishRace(); }
+          if (player.lap >= LAPS && !player.finished) { player.finished = true; player.finishTime = raceTime; if (MP) finishRaceMP(); else finishRace(); }
         }
       }
 
@@ -646,18 +735,17 @@
         ctx.setLineDash([24, 26]); strokePolyline(b, 4, th.line); ctx.setLineDash([]);
       }
 
+      // Flat, clean X-junction at each self-crossing: cover the kerb lines that
+      // would otherwise cut across the intersection, then redraw the centre dashes.
       function drawOverpasses() {
         const th = T.theme, w = T.half * 2;
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
         for (const c of T.crossings) {
-          const idxs = rangeIdx(c.over, 9);
-          // drop shadow of the bridge onto the lower road
-          pathLoop(T.pts, idxs, false); ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(0,0,0,0.32)'; ctx.lineWidth = w + 30; ctx.stroke();
-          // bridge deck (raised road)
-          strokeRoad(idxs, false, true);
-          // railings (offset polylines)
-          const railL = [], railR = [];
-          for (const i of idxs) { const nx = -T.dirs[i][1], ny = T.dirs[i][0]; railL.push([T.pts[i][0] + nx * (T.half + 6), T.pts[i][1] + ny * (T.half + 6)]); railR.push([T.pts[i][0] - nx * (T.half + 6), T.pts[i][1] - ny * (T.half + 6)]); }
-          strokePolyline(railL, 6, 'rgba(255,255,255,0.85)'); strokePolyline(railR, 6, 'rgba(255,255,255,0.85)');
+          const strands = [rangeIdx(c.i, 7), rangeIdx(c.j, 7)];
+          // asphalt patch over both strands -> swallows the red/white kerbs through the junction
+          for (const idxs of strands) { pathLoop(T.pts, idxs, false); ctx.strokeStyle = th.road; ctx.lineWidth = w + 18; ctx.stroke(); }
+          // redraw the dashed centre line across the junction
+          for (const idxs of strands) { pathLoop(T.pts, idxs, false); ctx.strokeStyle = th.line; ctx.lineWidth = 4; ctx.setLineDash([24, 26]); ctx.stroke(); ctx.setLineDash([]); }
         }
       }
 
@@ -712,6 +800,7 @@
           else if (type === 'barrel') { ctx.fillStyle = 'rgba(0,0,0,0.3)'; fillC(2, 4, r); ctx.fillStyle = '#c23b2f'; fillC(0, 0, r); ctx.strokeStyle = '#7a1f17'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, r * 0.6, 0, Math.PI * 2); ctx.stroke(); }
           else if (type === 'cone') { ctx.fillStyle = '#f08a24'; ctx.beginPath(); ctx.moveTo(0, -r * 1.3); ctx.lineTo(-r, r); ctx.lineTo(r, r); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(-r * 0.7, -r * 0.1, r * 1.4, r * 0.35); }
           else if (type === 'snowman') { ctx.fillStyle = 'rgba(0,0,0,0.25)'; fillE(3, r * 0.7, r, r * 0.4); ctx.fillStyle = '#fff'; fillC(0, r * 0.4, r * 0.7); fillC(0, -r * 0.45, r * 0.5); ctx.fillStyle = '#222'; fillC(-r * 0.15, -r * 0.5, 2.4); fillC(r * 0.15, -r * 0.5, 2.4); ctx.fillStyle = '#f08a24'; ctx.beginPath(); ctx.moveTo(0, -r * 0.42); ctx.lineTo(r * 0.5, -r * 0.36); ctx.lineTo(0, -r * 0.3); ctx.closePath(); ctx.fill(); }
+          else if (type === 'barrier') { ctx.fillStyle = 'rgba(0,0,0,0.28)'; fillC(1.5, 2.5, r); ctx.fillStyle = '#d23b2f'; fillC(0, 0, r); ctx.fillStyle = '#fff'; fillC(-r * 0.3, -r * 0.3, r * 0.42); }
           else if (type === 'sign') {
             // median sign at the fork
             ctx.fillStyle = '#444'; ctx.fillRect(-3, 0, 6, 26);
@@ -735,8 +824,29 @@
         drawStartLine();
         drawSkids();
         drawObstacles();
-        for (const a of ais) drawCar(a.x, a.y, a.drawAngle, a.color, false);
-        drawCar(player.x, player.y, player.drawAngle, player.color, true);
+        if (MP) {
+          for (const pe of peers.values()) {
+            drawCar(pe.x, pe.y, pe.drawAngle, pe.color, false);
+            drawNameTag(pe.x, pe.y, pe.name, pe.color);
+          }
+          if (player) drawCar(player.x, player.y, player.drawAngle, player.color, true);
+        } else {
+          for (const a of ais) drawCar(a.x, a.y, a.drawAngle, a.color, false);
+          drawCar(player.x, player.y, player.drawAngle, player.color, true);
+        }
+      }
+
+      // Étiquette de pseudo, redressée à l'écran (on annule la rotation du monde).
+      function drawNameTag(x, y, name, color) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(Math.PI / 2 + player.angle);
+        ctx.font = "bold 13px 'Trebuchet MS', sans-serif";
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+        ctx.strokeText(name, 0, -22);
+        ctx.fillStyle = '#fff'; ctx.fillText(name, 0, -22);
+        ctx.restore();
       }
 
       function render() {
@@ -750,9 +860,15 @@
       }
 
       function updateHUD() {
-        const pos = rankings().indexOf(player) + 1;
         document.getElementById('hud-lap').textContent = Math.min(player.lap + 1, LAPS) + '/' + LAPS;
-        document.getElementById('hud-pos').textContent = pos + '/4';
+        if (MP) {
+          const list = mpRankings();
+          const pos = list.findIndex((r) => r.me) + 1;
+          document.getElementById('hud-pos').textContent = pos + '/' + list.length;
+        } else {
+          const pos = rankings().indexOf(player) + 1;
+          document.getElementById('hud-pos').textContent = pos + '/4';
+        }
         document.getElementById('hud-time').textContent = raceTime.toFixed(1);
       }
 
@@ -768,12 +884,23 @@
           else { const n = Math.ceil(countdownT); cd.textContent = n > 0 ? n : 'GO'; }
           updateSteer(dt);
         } else if (state === 'racing') {
-          raceTime += dt; updatePlayer(dt); for (const a of ais) updateAI(a, dt);
-          resolveCollisions(dt); updateSkids(dt); updateSteer(dt); updateHUD(); updateEngine();
+          raceTime += dt; updatePlayer(dt);
+          if (MP) { updatePeers(dt); resolveCollisionsMP(dt); sendState(dt); }
+          else { for (const a of ais) updateAI(a, dt); resolveCollisions(dt); }
+          updateSkids(dt); updateSteer(dt); updateHUD(); updateEngine();
         } else if (state === 'finished') {
-          for (const a of ais) if (!a.finished) updateAI(a, dt); updateSkids(dt);
+          if (MP) {
+            updatePeers(dt); updateSkids(dt);
+            mpEndAccum += dt;
+            if (mpEndAccum > 0.5) {
+              mpEndAccum = 0;
+              if (!document.getElementById('end-overlay').classList.contains('hidden')) renderMpEnd();
+            }
+          } else {
+            for (const a of ais) if (!a.finished) updateAI(a, dt); updateSkids(dt);
+          }
         }
-        if (T) render();
+        if (T && player) render();
         requestAnimationFrame(loop);
       }
 
@@ -872,18 +999,351 @@
         });
       }
 
-      document.getElementById('restart-btn').addEventListener('click', () => { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); startMap(currentMap); });
-      document.getElementById('change-btn').addEventListener('click', showMapSelect);
+      document.getElementById('restart-btn').addEventListener('click', () => {
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        if (MP) { if (isHost && net) net.send({ type: 'race-go' }); return; }
+        startMap(currentMap);
+      });
+      document.getElementById('change-btn').addEventListener('click', () => {
+        if (MP) { if (isHost && net) net.send({ type: 'race-tomenu' }); return; }
+        showMapSelect();
+      });
       document.getElementById('mute-btn').addEventListener('click', (e) => {
         muted = !muted; e.currentTarget.textContent = muted ? '🔇' : '🔊';
         if (muted && engineGain && audioCtx) engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
       });
 
       // ====================================================================
+      //  MULTIJOUEUR — réseau, salle d'attente, pairs, classement
+      // ====================================================================
+      let netAccum = 0, mpEndAccum = 0;
+
+      function escapeHtmlR(s) {
+        return String(s).replace(/[&<>"']/g, (c) =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+
+      // Petit client WebSocket (même endpoint /ws que le lobby, proxifié par Vite
+      // et le tunnel HTTPS).
+      function makeNet() {
+        const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+        const handlers = new Map();
+        let sock = null;
+        const queue = [];
+        function emit(t, d) { const fn = handlers.get(t); if (fn) fn(d); }
+        function connect() {
+          sock = new WebSocket(url);
+          sock.addEventListener('open', () => { queue.forEach((m) => sock.send(m)); queue.length = 0; emit('open'); });
+          sock.addEventListener('message', (ev) => { let m; try { m = JSON.parse(ev.data); } catch { return; } emit(m.type, m); });
+          sock.addEventListener('close', () => emit('close'));
+          sock.addEventListener('error', () => emit('neterror'));
+        }
+        return {
+          on(t, fn) { handlers.set(t, fn); return this; },
+          connect,
+          send(o) {
+            const d = JSON.stringify(o);
+            if (sock && sock.readyState === 1) sock.send(d);
+            else { queue.push(d); if (!sock || sock.readyState > 1) connect(); }
+          },
+        };
+      }
+
+      function mpInit() {
+        net = makeNet();
+        net
+          .on('race-welcome', onWelcome)
+          .on('race-roster', (m) => { if (m.hostId) isHost = m.hostId === myId; renderMpRoster(m.players); })
+          .on('race-map', (m) => highlightMap(m.mapIndex | 0))
+          .on('race-start', onRaceStart)
+          .on('race-peer', (m) => onPeer(m.id, m.s))
+          .on('race-finished', onFinished)
+          .on('race-tolobby', onToLobby)
+          .on('race-gone', () => mpFallback('La partie a expiré. Tu peux jouer en solo.'))
+          .on('close', () => { if (state === 'mpwait') mpFallback('Déconnecté du serveur.'); })
+          .on('neterror', () => { if (state === 'mpwait') mpFallback('Connexion au serveur impossible.'); });
+        buildMpMaps();
+        document.getElementById('mp-overlay').classList.remove('hidden');
+        net.connect();
+        net.send({ type: 'race-hello', code: ROOM, pid: MY_PID, name: MY_NAME });
+      }
+
+      function onWelcome(m) {
+        myId = m.you;
+        isHost = m.hostId === myId;
+        raceMapIndex = m.mapIndex | 0;
+        highlightMap(raceMapIndex);
+        renderMpRoster(m.players);
+        if (m.phase === 'racing') {
+          document.getElementById('mp-sub').textContent = 'Course en cours… tu joueras à la prochaine manche.';
+        }
+      }
+
+      // --- Salle d'attente : liste des joueurs + choix du circuit (hôte) ---
+      function renderMpRoster(playersList) {
+        const ul = document.getElementById('mp-players');
+        ul.innerHTML = '';
+        playersList.forEach((p) => {
+          const li = document.createElement('li');
+          li.className = 'player';
+          const col = MP_COLORS[(p.slot ?? 0) % MP_COLORS.length];
+          li.innerHTML =
+            `<span class="dot" style="color:${col};background:${col}"></span>` +
+            `<span class="pname">${escapeHtmlR(p.name)}${p.id === myId ? ' (toi)' : ''}</span>` +
+            (p.isHost ? '<span class="badge">Hôte</span>' : '') +
+            (p.connected ? '' : '<span class="off">hors-ligne</span>');
+          ul.appendChild(li);
+        });
+        document.getElementById('mp-start').classList.toggle('hidden', !isHost);
+        document.getElementById('mp-wait').classList.toggle('hidden', isHost);
+        document.getElementById('mp-sub').textContent = isHost
+          ? 'Choisis le circuit, puis lance la course 🏁'
+          : "En attente que l'hôte lance la course…";
+      }
+
+      function buildMpMaps() {
+        const wrap = document.getElementById('mp-maps');
+        wrap.innerHTML = '';
+        MAPS.forEach((m, i) => {
+          const card = document.createElement('div');
+          card.className = 'map-card';
+          card.dataset.i = i;
+          card.style.background = m.theme.card;
+          const cv = document.createElement('canvas');
+          cv.width = 220; cv.height = 120;
+          card.appendChild(cv);
+          const info = document.createElement('div');
+          info.innerHTML =
+            '<div class="mc-row"><span class="mc-emoji">' + m.emoji + '</span><span class="mc-name">' + m.name + '</span></div>' +
+            '<div class="mc-desc">' + m.desc + '</div>';
+          card.appendChild(info);
+          drawMiniTrack(cv, m);
+          card.addEventListener('click', () => {
+            if (!isHost || !net) return;
+            net.send({ type: 'race-setmap', mapIndex: i });
+          });
+          wrap.appendChild(card);
+        });
+        highlightMap(raceMapIndex);
+      }
+
+      function highlightMap(idx) {
+        raceMapIndex = idx;
+        document.querySelectorAll('#mp-maps .map-card').forEach((c) => {
+          c.style.outline = +c.dataset.i === idx ? '3px solid #4ade80' : '2px solid transparent';
+        });
+      }
+
+      // --- Top départ : construire la piste partagée et placer chaque joueur ---
+      function onRaceStart(m) {
+        currentMap = m.mapIndex | 0;
+        buildTrack(MAPS[currentMap]);
+        spawnRacersMP(m.players);
+        document.getElementById('mp-overlay').classList.add('hidden');
+        document.getElementById('end-overlay').classList.add('hidden');
+        document.getElementById('start-overlay').classList.add('hidden');
+        document.getElementById('hud').classList.remove('hidden');
+        document.getElementById('controls').classList.remove('hidden');
+        document.getElementById('wheel-wrap').classList.remove('hidden');
+        document.getElementById('countdown').style.display = 'flex';
+        state = 'countdown'; countdownT = 3.999; raceTime = 0; bestLap = Infinity; lapStartTime = 0;
+        steer = 0; keyLeft = keyRight = zoneLeft = zoneRight = false; wheelDrag = false;
+        skidMarks.length = 0; netAccum = 0; mpEndAccum = 0;
+        initAudio();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      }
+
+      function spawnRacersMP(list) {
+        peers.clear();
+        player = null;
+        const sorted = [...list].sort((a, b) => a.slot - b.slot);
+        for (const e of sorted) {
+          const lane = MP_LANES[e.slot % MP_LANES.length];
+          const r = makeRacer(0, lane);
+          r.color = MP_COLORS[e.slot % MP_COLORS.length];
+          r.name = e.name;
+          const back = e.slot * 34;
+          r.x -= T.dirs[0][0] * back; r.y -= T.dirs[0][1] * back;
+          if (e.id === myId) {
+            player = r;
+          } else {
+            r.id = e.id;
+            r.tx = r.x; r.ty = r.y; r.tangle = r.angle; r.tdraw = r.drawAngle;
+            r.prog = 0;
+            peers.set(e.id, r);
+          }
+        }
+        // Sécurité : si je n'étais pas dans la liste, je suis quand même posé.
+        if (!player) player = makeRacer(0, MP_LANES[0]);
+      }
+
+      // --- Voitures distantes : on reçoit des positions, on interpole ---
+      function onPeer(id, s) {
+        const pe = peers.get(id);
+        if (!pe || !s) return;
+        pe.tx = s[0]; pe.ty = s[1]; pe.tangle = s[2]; pe.tdraw = s[3];
+        pe.prog = s[4]; pe.lap = s[5]; pe.v = s[6]; pe.drifting = !!s[7];
+      }
+      function lerpAng(a, b, k) {
+        let d = b - a;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        return a + d * k;
+      }
+      function updatePeers(dt) {
+        const k = Math.min(1, 14 * dt);
+        for (const pe of peers.values()) {
+          pe.x += (pe.tx - pe.x) * k; pe.y += (pe.ty - pe.y) * k;
+          pe.angle = lerpAng(pe.angle, pe.tangle, k);
+          pe.drawAngle = lerpAng(pe.drawAngle, pe.tdraw, k);
+          emitSkid(pe, pe.drifting, pe.drawAngle);
+        }
+      }
+
+      // Je suis seul maître de ma voiture : je me repousse des autres et des
+      // obstacles solides (chaque client fait pareil de son côté).
+      function resolveCollisionsMP(dt) {
+        const minDist = CAR_RADIUS * 2;
+        for (const pe of peers.values()) {
+          let dx = pe.x - player.x, dy = pe.y - player.y, d = Math.hypot(dx, dy);
+          if (d === 0) { dx = 1; dy = 0; d = 1; }
+          if (d >= minDist) continue;
+          const ov = minDist - d;
+          player.x -= (dx / d) * ov * 0.8; player.y -= (dy / d) * ov * 0.8;
+          player.collSlow = Math.max(player.collSlow, 0.3);
+        }
+        for (const o of T.obstacles) {
+          if (!o.solid) continue;
+          let dx = player.x - o.x, dy = player.y - o.y, d = Math.hypot(dx, dy);
+          const minD = o.r + CAR_RADIUS;
+          if (d === 0) { dx = 1; dy = 0; d = 1; }
+          if (d >= minD) continue;
+          player.x += (dx / d) * (minD - d); player.y += (dy / d) * (minD - d);
+          player.collSlow = Math.max(player.collSlow, 0.4);
+        }
+      }
+
+      function myProg() { return player.lap * T.N + (((player.accum % T.N) + T.N) % T.N); }
+
+      function sendState(dt) {
+        netAccum += dt;
+        if (netAccum < 0.05 || !net) return;
+        netAccum = 0;
+        net.send({
+          type: 'race-state',
+          s: [
+            Math.round(player.x), Math.round(player.y),
+            +player.angle.toFixed(2), +player.drawAngle.toFixed(2),
+            Math.round(myProg()), player.lap, Math.round(player.v), player.drifting ? 1 : 0,
+          ],
+        });
+      }
+
+      // Classement multijoueur : arrivés (au temps) d'abord, puis par progression.
+      function mpRankings() {
+        const list = [{ me: true, id: myId, name: 'Toi', prog: myProg(), finished: player.finished, finishTime: player.finishTime }];
+        for (const pe of peers.values()) {
+          list.push({ me: false, id: pe.id, name: pe.name, prog: pe.prog || 0, finished: !!pe.finished, finishTime: pe.finishTime || 0 });
+        }
+        list.sort((a, b) => {
+          if (a.finished && b.finished) return a.finishTime - b.finishTime;
+          if (a.finished) return -1;
+          if (b.finished) return 1;
+          return b.prog - a.prog;
+        });
+        return list;
+      }
+
+      function finishRaceMP() {
+        state = 'finished';
+        if (net) net.send({ type: 'race-finish', time: player.finishTime });
+        document.getElementById('end-overlay').classList.remove('hidden');
+        document.getElementById('wheel-wrap').classList.add('hidden');
+        renderMpEnd();
+        if (engineGain && audioCtx) engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+      }
+
+      function renderMpEnd() {
+        const list = mpRankings();
+        const place = list.findIndex((r) => r.me) + 1;
+        const titles = ['🏆 VICTOIRE !', '🥈 2ème place', '🥉 3ème place', '4ème', '5ème', '6ème', '7ème', '8ème'];
+        document.getElementById('end-title').textContent = player.finished ? (titles[place - 1] || place + 'ème') : 'Classement';
+        document.getElementById('end-pos').textContent = place + ' / ' + list.length;
+        document.getElementById('end-detail').innerHTML = list.map((r, i) => {
+          const status = r.finished
+            ? r.finishTime.toFixed(1) + 's'
+            : (r.prog > 0 ? 'tour ' + Math.min(LAPS, Math.floor(r.prog / T.N) + 1) : '—');
+          return '<div style="display:flex;justify-content:space-between;gap:18px;min-width:250px">' +
+            '<b>' + (i + 1) + '. ' + escapeHtmlR(r.name) + (r.me ? ' (toi)' : '') + '</b>' +
+            '<span style="opacity:.8">' + status + '</span></div>';
+        }).join('');
+        const restart = document.getElementById('restart-btn');
+        const change = document.getElementById('change-btn');
+        restart.textContent = 'Rejouer';
+        change.textContent = 'Changer de circuit';
+        restart.classList.toggle('hidden', !isHost);
+        change.classList.toggle('hidden', !isHost);
+      }
+
+      function onFinished(m) {
+        if (m.id === myId) return;
+        const pe = peers.get(m.id);
+        if (pe) { pe.finished = true; pe.finishTime = m.time; }
+        if (!document.getElementById('end-overlay').classList.contains('hidden')) renderMpEnd();
+      }
+
+      function onToLobby(m) {
+        raceMapIndex = m.mapIndex | 0;
+        isHost = m.hostId === myId;
+        state = 'mpwait';
+        document.getElementById('end-overlay').classList.add('hidden');
+        document.getElementById('hud').classList.add('hidden');
+        document.getElementById('controls').classList.add('hidden');
+        document.getElementById('wheel-wrap').classList.add('hidden');
+        document.getElementById('mp-overlay').classList.remove('hidden');
+        document.getElementById('mp-sub').textContent = isHost
+          ? 'Choisis le circuit, puis lance la course 🏁'
+          : "En attente que l'hôte lance la course…";
+        document.getElementById('mp-start').classList.toggle('hidden', !isHost);
+        document.getElementById('mp-wait').classList.toggle('hidden', isHost);
+        highlightMap(raceMapIndex);
+      }
+
+      // Repli solo si le multijoueur échoue (salon expiré / serveur injoignable).
+      function mpFallback(message) {
+        if (!MP) return;
+        MP = false;
+        if (net) { net = null; }
+        const err = document.createElement('div');
+        err.id = 'mp-error';
+        err.textContent = message;
+        document.body.appendChild(err);
+        setTimeout(() => err.remove(), 5000);
+        document.getElementById('mp-overlay').classList.add('hidden');
+        buildMapCards();
+        buildTrack(MAPS[0]); spawnRacers(); state = 'menu';
+        showMapSelect();
+      }
+
+      document.getElementById('mp-start').addEventListener('click', () => {
+        if (!isHost || !net) return;
+        initAudio();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        net.send({ type: 'race-go' });
+      });
+
+      // ====================================================================
       //  BOOT
       // ====================================================================
-      buildMapCards();
-      buildTrack(MAPS[0]); spawnRacers(); state = 'menu'; raceTime = 0;
+      if (MP) {
+        // Multijoueur : on attend la salle d'attente puis le top départ du salon.
+        document.getElementById('start-overlay').classList.add('hidden');
+        buildTrack(MAPS[0]); state = 'mpwait'; raceTime = 0;
+        mpInit();
+      } else {
+        buildMapCards();
+        buildTrack(MAPS[0]); spawnRacers(); state = 'menu'; raceTime = 0;
+      }
       requestAnimationFrame(loop);
     </script>
     <script>
