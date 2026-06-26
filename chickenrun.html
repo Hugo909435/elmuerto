@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Chicken Run — El Muerto Arcade</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 100%; height: 100%; overflow: hidden;
+        background: #0b1020; color: #fff;
+        font-family: 'Trebuchet MS', system-ui, sans-serif;
+        -webkit-user-select: none; user-select: none;
+        touch-action: manipulation;
+      }
+      #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+      /* tape sur tout l'écran pour changer de côté */
+      #tap-zone {
+        position: fixed; inset: 0; z-index: 5;
+        display: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #tap-zone.active { display: block; }
+
+      /* ---- HUD ---- */
+      #hud {
+        position: fixed; top: 0; left: 0; right: 0;
+        display: none; flex-direction: column; align-items: center;
+        padding: max(10px, env(safe-area-inset-top)) 12px 0;
+        z-index: 8; pointer-events: none;
+      }
+      #hud.show { display: flex; }
+      .hud-pill {
+        background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.14); border-radius: 999px;
+        padding: 8px 18px; font-size: 16px; font-weight: 800;
+        display: flex; align-items: center; gap: 10px;
+      }
+      .hud-pill .small { font-size: 12px; font-weight: 600; opacity: 0.75; }
+
+      /* indicateur de tape au centre */
+      #tap-hint {
+        position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom,0px) + 40px);
+        transform: translateX(-50%);
+        z-index: 7; pointer-events: none;
+        text-align: center;
+      }
+      #tap-hint.hidden { display: none; }
+      #tap-hint .big {
+        font-size: clamp(24px, 8vw, 42px); font-weight: 900;
+        letter-spacing: 1px; color: #fde047;
+        text-shadow: 0 4px 18px rgba(0,0,0,0.5);
+        animation: pulse 0.7s ease-in-out infinite;
+      }
+      #tap-hint .sub { font-size: 14px; opacity: 0.8; margin-top: 2px; }
+      @keyframes pulse { 0%,100%{ transform: scale(1);} 50%{ transform: scale(1.12);} }
+
+      /* ---- bouton retour ---- */
+      #home-btn {
+        position: fixed;
+        top: max(10px, env(safe-area-inset-top)); left: 10px;
+        z-index: 20;
+        display: flex; align-items: center; justify-content: center;
+        text-decoration: none; background: rgba(0,0,0,0.6);
+        border: 1px solid rgba(255,255,255,0.15); border-radius: 50%;
+        width: 42px; height: 42px; font-size: 19px; color: #fff;
+      }
+
+      /* ---- overlays ---- */
+      .overlay {
+        position: fixed; inset: 0; z-index: 30;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        text-align: center; gap: 18px;
+        padding: max(28px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
+        background: rgba(8,12,28,0.94); backdrop-filter: blur(6px);
+      }
+      .overlay.hidden { display: none; }
+      .overlay h1 { font-size: clamp(30px, 9vw, 56px); letter-spacing: 1px; }
+      .overlay p { font-size: clamp(14px, 4vw, 19px); opacity: 0.85; max-width: 440px; line-height: 1.5; }
+      .btn {
+        cursor: pointer; border: none; border-radius: 999px;
+        padding: 16px 40px; font-size: 18px; font-weight: 800;
+        letter-spacing: 1px; text-transform: uppercase; font-family: inherit;
+        background: linear-gradient(180deg, #fbbf24, #f59e0b);
+        color: #3a2600; box-shadow: 0 8px 24px rgba(245,158,11,0.4);
+        transition: transform 0.1s ease;
+      }
+      .btn:active { transform: scale(0.95); }
+
+      /* compte à rebours */
+      #countdown-overlay {
+        position: fixed; inset: 0; z-index: 40;
+        display: none; align-items: center; justify-content: center;
+        pointer-events: none;
+      }
+      #countdown-overlay.show { display: flex; }
+      #countdown-num {
+        font-size: clamp(90px, 28vw, 200px); font-weight: 900;
+        color: #fff; text-shadow: 0 8px 40px rgba(0,0,0,0.6);
+      }
+      .pop-anim { animation: pop 0.5s ease-out; }
+      @keyframes pop {
+        0% { transform: scale(2); opacity: 0; }
+        40% { opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+
+      /* reveal classement (MP) */
+      #score-reveal-overlay { justify-content: flex-start; padding-top: max(48px, env(safe-area-inset-top)); gap: 12px; }
+      #reveal-title { font-size: clamp(26px, 7vw, 44px); }
+      #reveal-list { width: 100%; max-width: 400px; flex: 1; overflow-y: auto; margin-top: 6px; }
+      .rp-entry {
+        display: flex; align-items: center; gap: 12px;
+        padding: 12px 16px; border-radius: 14px;
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.1);
+        margin-bottom: 10px;
+        transform: translateY(20px); opacity: 0;
+        transition: transform 0.45s ease, opacity 0.45s ease;
+      }
+      .rp-entry.visible { transform: translateY(0); opacity: 1; }
+      .rp-entry.winner { background: rgba(255,226,122,0.12); border-color: rgba(255,226,122,0.35); }
+      .rp-rank { font-size: 26px; width: 34px; text-align: center; }
+      .rp-name { flex: 1; font-weight: 700; font-size: 15px; text-align: left; }
+      .rp-score { font-size: 20px; font-weight: 900; color: #ffe27a; }
+
+      .hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div id="tap-zone"></div>
+
+    <a id="home-btn" href="/" aria-label="Retour">←</a>
+
+    <!-- HUD course -->
+    <div id="hud">
+      <div class="hud-pill">
+        <span id="hud-pos">0 m</span>
+        <span class="small">/ <span id="hud-len">100</span> m</span>
+        <span class="small" id="hud-time">0.0 s</span>
+      </div>
+    </div>
+
+    <!-- Indicateur tape -->
+    <div id="tap-hint" class="hidden">
+      <div class="big">TAPE pour changer de côté</div>
+      <div class="sub">Évite les obstacles… sinon tu ralentis&nbsp;!</div>
+    </div>
+
+    <!-- Compte à rebours -->
+    <div id="countdown-overlay"><div id="countdown-num"></div></div>
+
+    <!-- Solo: départ -->
+    <div id="start-overlay" class="overlay">
+      <h1>🐔 Chicken Run</h1>
+      <p>Ton poulet court tout seul. Tape l'écran pour le faire passer du sol au plafond et éviter les obstacles&nbsp;: à chaque obstacle touché, tu ralentis. Premier à la ligne d'arrivée gagne&nbsp;!</p>
+      <button id="start-btn" class="btn">C'est parti&nbsp;!</button>
+    </div>
+
+    <!-- Solo: résultat -->
+    <div id="result-overlay" class="overlay hidden">
+      <h1>🏁 Terminé&nbsp;!</h1>
+      <div style="font-size:clamp(40px,12vw,72px);font-weight:900;color:#ffe27a" id="result-time">0.0 s</div>
+      <p id="result-detail"></p>
+      <button id="replay-btn" class="btn">Rejouer</button>
+    </div>
+
+    <!-- MP: attente connexion -->
+    <div id="mp-wait-overlay" class="overlay hidden">
+      <div style="font-size:52px">🐔</div>
+      <h1>Sur la ligne…</h1>
+      <p id="mp-wait-msg">Connexion…</p>
+    </div>
+
+    <!-- MP: course finie, attente des autres -->
+    <div id="mp-done-overlay" class="overlay hidden">
+      <div style="font-size:52px">🏁</div>
+      <h1 id="mp-done-time">0.0 s</h1>
+      <p id="mp-done-msg">En attente des autres poulets…</p>
+    </div>
+
+    <!-- MP: classement -->
+    <div id="score-reveal-overlay" class="overlay hidden">
+      <h1 id="reveal-title">🏆 Classement</h1>
+      <div id="reveal-list"></div>
+      <button id="reveal-continue-btn" class="btn hidden">Retour au lobby →</button>
+    </div>
+
+    <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const show = el => el.classList.remove('hidden');
+      const hide = el => el.classList.add('hidden');
+      const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c =>
+        ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+      // ---------- Réglages du jeu ----------
+      // Course : le poulet avance tout seul. SOL (lane 0) ou PLAFOND (lane 1).
+      // Taper bascule de côté. Un obstacle est au sol OU au plafond : si le
+      // poulet est du même côté quand il passe, il ralentit. 1er arrivé gagne.
+      const TRACK_LEN   = 100;    // longueur de la piste (unités/"mètres")
+      const BASE0       = 13;     // vitesse de croisière de départ (u/s)
+      const BASE_RAMP   = 0.06;   // gain de vitesse par mètre parcouru -> de + en + vite
+      const RECOVER     = 2.4;    // vitesse de retour à la croisière après un choc (/s)
+      const HIT_FACTOR  = 0.20;   // vitesse résiduelle juste après un choc
+      const MAX_TIME    = 60;     // s — sécurité
+      const FIRST_OBST  = 12;     // distance avant le 1er obstacle (unités)
+      const GAP_MIN     = 7.5;    // écart mini entre obstacles (unités)
+      const GAP_VAR     = 5.5;    // variation aléatoire (unités)
+      const OBST_HALF_W = 0.9;    // demi-largeur de collision (unités)
+      const SEED        = 0x9e3779b1; // graine FIXE -> obstacles identiques pour tous
+      const SCALE       = 17;     // pixels par unité de monde
+      const CHICK_X     = 86;     // position horizontale fixe du poulet (px)
+
+      const LANE_COLORS = ['#fbbf24','#60a5fa','#4ade80','#f87171','#c084fc','#fb923c','#34d399','#f472b6'];
+
+      // ---------- Générateur déterministe (LCG) ----------
+      function makeRng(seed) {
+        let s = seed >>> 0;
+        return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+      }
+
+      // Obstacles : positions-monde + côté (0=sol, 1=plafond), identiques partout.
+      let obstacles = [];
+      function generateObstacles() {
+        const rng = makeRng(SEED);
+        obstacles = [];
+        let p = FIRST_OBST;
+        let lastLane = -1;
+        while (p < TRACK_LEN - 4) {
+          // éviter 3 obstacles d'affilée du même côté (plus lisible)
+          let lane = rng() < 0.5 ? 0 : 1;
+          if (lane === lastLane && rng() < 0.5) lane = 1 - lane;
+          lastLane = lane;
+          obstacles.push({ pos: p, lane });
+          p += GAP_MIN + rng() * GAP_VAR;
+        }
+      }
+
+      // ---------- Canvas ----------
+      const canvas = $('game');
+      const ctx = canvas.getContext('2d');
+      let W = 0, H = 0, DPR = 1;
+      function resize() {
+        DPR = Math.min(window.devicePixelRatio || 1, 2);
+        W = window.innerWidth; H = window.innerHeight;
+        canvas.width = W * DPR; canvas.height = H * DPR;
+        canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+        ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      // ---------- Paramètres URL ----------
+      const params = new URLSearchParams(location.search);
+      const roomCode = params.get('room');
+      const myId = params.get('pid') || (() => { try { return localStorage.getItem('emarcade-pid'); } catch { return null; } })();
+      const myName = params.get('name') || 'Toi';
+      const isMP = !!(roomCode && myId);
+
+      // ---------- État des poules ----------
+      // runner: { id, name, color, pos, speed, lane(0/1), vis(0..1 anim), finished, time, nextObst, hitFlash }
+      let runners = [];
+      let me = null;
+      let gameState = 'idle';   // idle | countdown | running | done
+      let startAt = 0;
+
+      function makeRunner(id, name, color) {
+        return { id, name, color, pos: 0, speed: BASE0, lane: 0, vis: 0, finished: false, time: 0, nextObst: 0, hitFlash: 0 };
+      }
+
+      function baseSpeed(pos) { return BASE0 + pos * BASE_RAMP; }
+
+      // ---------- Rendu ----------
+      function laneRect(i, n) {
+        const top = Math.min(110, H * 0.14);
+        const bottom = H - Math.max(30, H * 0.05);
+        const usable = bottom - top;
+        const laneH = usable / n;
+        return { top: top + i * laneH, h: laneH };
+      }
+
+      // y des "pieds" du poulet selon vis (0 = sol, 1 = plafond)
+      function tunnelY(ln) {
+        const floorY = ln.top + ln.h * 0.80;
+        const ceilY  = ln.top + ln.h * 0.30;
+        return { floorY, ceilY };
+      }
+
+      function drawChicken(x, feetY, scale, color, color2, flipped, flap, flash) {
+        const s = scale;
+        ctx.save();
+        ctx.translate(x, feetY);
+        if (flipped) ctx.scale(1, -1);
+        if (flash > 0) { ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(flash * 25)); }
+        // pattes
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = Math.max(1.5, 2 * s);
+        ctx.lineCap = 'round';
+        const legSwing = Math.sin(flap) * 3 * s;
+        ctx.beginPath();
+        ctx.moveTo(-3 * s, -6 * s); ctx.lineTo(-3 * s + legSwing, 0);
+        ctx.moveTo(3 * s, -6 * s);  ctx.lineTo(3 * s - legSwing, 0);
+        ctx.stroke();
+        // corps
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.ellipse(0, -15 * s, 11 * s, 12 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // aile
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        ctx.beginPath();
+        ctx.ellipse(-2 * s, -15 * s + Math.sin(flap * 2) * 1.5 * s, 7 * s, 8 * s, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        // tête
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(7 * s, -26 * s, 7 * s, 0, Math.PI * 2);
+        ctx.fill();
+        // crête
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(6 * s, -33 * s, 2.4 * s, 0, Math.PI * 2);
+        ctx.arc(9 * s, -33 * s, 2.4 * s, 0, Math.PI * 2);
+        ctx.fill();
+        // bec
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.moveTo(13 * s, -26 * s); ctx.lineTo(19 * s, -24 * s); ctx.lineTo(13 * s, -23 * s);
+        ctx.closePath(); ctx.fill();
+        // oeil
+        ctx.fillStyle = '#111';
+        ctx.beginPath();
+        ctx.arc(8.5 * s, -27 * s, 1.4 * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawObstacle(x, ln, scale, lane) {
+        const s = scale;
+        const { floorY, ceilY } = tunnelY(ln);
+        const h = 30 * s, w = 15 * s;
+        ctx.save();
+        ctx.fillStyle = '#16a34a';
+        if (lane === 0) {
+          // pic au sol
+          ctx.beginPath();
+          ctx.moveTo(x - w / 2, floorY);
+          ctx.lineTo(x + w / 2, floorY);
+          ctx.lineTo(x, floorY - h);
+          ctx.closePath(); ctx.fill();
+        } else {
+          // pic au plafond
+          ctx.beginPath();
+          ctx.moveTo(x - w / 2, ceilY);
+          ctx.lineTo(x + w / 2, ceilY);
+          ctx.lineTo(x, ceilY + h);
+          ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      let animClock = 0;
+      function render() {
+        animClock += 0.1;
+        // ciel
+        const sky = ctx.createLinearGradient(0, 0, 0, H);
+        sky.addColorStop(0, '#1d4ed8');
+        sky.addColorStop(1, '#0b1020');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, W, H);
+
+        const n = runners.length || 1;
+        const finishX = W - 40;
+
+        runners.forEach((r, i) => {
+          const ln = laneRect(i, n);
+          const { floorY, ceilY } = tunnelY(ln);
+          const scale = Math.max(0.5, Math.min(0.95, ln.h / 175));
+
+          // bande de voie
+          ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.07)';
+          ctx.fillRect(0, ln.top, W, ln.h);
+          // sol + plafond
+          ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, floorY + 1); ctx.lineTo(W, floorY + 1);
+          ctx.moveTo(0, ceilY - 1);  ctx.lineTo(W, ceilY - 1);
+          ctx.stroke();
+
+          // obstacles (mêmes positions, décalés selon la progression de CE poulet)
+          for (let k = 0; k < obstacles.length; k++) {
+            const o = obstacles[k];
+            const sx = CHICK_X + (o.pos - r.pos) * SCALE;
+            if (sx < -30 || sx > W + 30) continue;
+            drawObstacle(sx, ln, scale, o.lane);
+          }
+
+          // ligne d'arrivée (damier vertical) quand elle entre dans le champ
+          const fx = CHICK_X + (TRACK_LEN - r.pos) * SCALE;
+          if (fx < W + 40) {
+            const sq = Math.max(6, ln.h / 12);
+            for (let y = ln.top; y < ln.top + ln.h; y += sq) {
+              const on = Math.floor((y - ln.top) / sq) % 2 === 0;
+              ctx.fillStyle = on ? '#fff' : '#111';
+              ctx.fillRect(fx, y, sq, Math.min(sq, ln.top + ln.h - y));
+            }
+          }
+
+          // étiquette nom + distance
+          ctx.font = `${Math.round(11 * scale + 3)}px 'Trebuchet MS', sans-serif`;
+          ctx.textAlign = 'left';
+          ctx.fillStyle = r.id === (me && me.id) ? '#fde047' : 'rgba(255,255,255,0.85)';
+          ctx.fillText(`${r.name}${r.finished ? '  🏁' : ''}`, 10, ln.top + 16);
+
+          // poule : interpolation sol(0)->plafond(1)
+          const feetY = floorY + (ceilY - floorY) * r.vis;
+          const flipped = r.vis > 0.5;
+          drawChicken(CHICK_X, feetY, scale, r.color, r.color, flipped, animClock + i, r.hitFlash);
+        });
+      }
+
+      // ---------- Boucle ----------
+      let lastT = performance.now();
+      function loop(now) {
+        const dt = Math.min(0.05, (now - lastT) / 1000);
+        lastT = now;
+
+        if (gameState === 'running') {
+          // animation de bascule (tous les poulets)
+          runners.forEach(r => {
+            const target = r.lane;
+            r.vis += (target - r.vis) * Math.min(1, dt * 16);
+            if (r.hitFlash > 0) r.hitFlash = Math.max(0, r.hitFlash - dt);
+          });
+
+          if (!me.finished) {
+            // physique : retour progressif vers la vitesse de croisière
+            const base = baseSpeed(me.pos);
+            me.speed += (base - me.speed) * Math.min(1, RECOVER * dt);
+            me.pos += me.speed * dt;
+
+            // collisions : à chaque obstacle franchi, vérifier le côté
+            while (me.nextObst < obstacles.length && me.pos >= obstacles[me.nextObst].pos) {
+              const o = obstacles[me.nextObst];
+              // côté "engagé" = le plus proche (sol si vis<0.5, sinon plafond)
+              const myLane = me.vis < 0.5 ? 0 : 1;
+              if (myLane === o.lane) {
+                me.speed = baseSpeed(me.pos) * HIT_FACTOR;
+                me.hitFlash = 0.4;
+              }
+              me.nextObst++;
+            }
+
+            if (me.pos >= TRACK_LEN) finishRace();
+
+            // HUD
+            $('hud-pos').textContent = Math.floor(Math.min(TRACK_LEN, me.pos)) + ' m';
+            const el = (now - startAt) / 1000;
+            $('hud-time').textContent = el.toFixed(1) + ' s';
+            if (el > MAX_TIME) finishRace();
+
+            maybeSendState(now);
+          }
+        }
+
+        render();
+        requestAnimationFrame(loop);
+      }
+      requestAnimationFrame(loop);
+
+      // ---------- Entrée (tape = bascule sol/plafond) ----------
+      function onTap() {
+        if (gameState !== 'running' || me.finished) return;
+        me.lane = me.lane === 0 ? 1 : 0;
+      }
+      const tapZone = $('tap-zone');
+      tapZone.addEventListener('pointerdown', (e) => { e.preventDefault(); onTap(); });
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowDown') { e.preventDefault(); onTap(); }
+      });
+
+      // ---------- Compte à rebours + départ ----------
+      function startCountdown() {
+        if (gameState !== 'idle') return;
+        gameState = 'countdown';
+        $('hud-len').textContent = TRACK_LEN;
+        $('hud').classList.add('show');
+        const ov = $('countdown-overlay');
+        ov.classList.add('show');
+        const steps = ['3', '2', '1', 'COURS !'];
+        let i = 0;
+        const tick = () => {
+          if (i >= steps.length) { ov.classList.remove('show'); beginRace(); return; }
+          const num = $('countdown-num');
+          num.textContent = steps[i];
+          num.classList.remove('pop-anim'); void num.offsetWidth; num.classList.add('pop-anim');
+          i++;
+          setTimeout(tick, 800);
+        };
+        tick();
+      }
+
+      function beginRace() {
+        gameState = 'running';
+        startAt = performance.now();
+        generateObstacles();
+        runners.forEach(r => { r.pos = 0; r.speed = BASE0; r.lane = 0; r.vis = 0; r.finished = false; r.time = 0; r.nextObst = 0; r.hitFlash = 0; });
+        tapZone.classList.add('active');
+        $('tap-hint').classList.remove('hidden');
+      }
+
+      let raceDone = false;
+      function finishRace() {
+        if (me.finished) return;
+        me.finished = true;
+        me.pos = TRACK_LEN;
+        me.time = (performance.now() - startAt) / 1000;
+        tapZone.classList.remove('active');
+        $('tap-hint').classList.add('hidden');
+
+        if (isMP) {
+          mpSend({ type: 'relay', data: { type: 'chick-fin', t: me.time } });
+          mpSend({ type: 'game-score', score: scoreFromTime(me.time) });
+          $('mp-done-time').textContent = me.time.toFixed(2) + ' s';
+          $('mp-done-msg').textContent = 'En attente des autres poulets…';
+          show($('mp-done-overlay'));
+        } else {
+          gameState = 'done';
+          $('result-time').textContent = me.time.toFixed(2) + ' s';
+          $('result-detail').textContent = me.time < 9 ? 'Sans-faute ou presque ! 🔥'
+            : me.time < 13 ? 'Bien couru !' : 'Vise les bons côtés pour aller plus vite !';
+          show($('result-overlay'));
+        }
+      }
+
+      function scoreFromTime(t) {
+        // plus c'est rapide, plus c'est de points (1er arrivé = vainqueur)
+        return Math.max(100, Math.min(1000, Math.round(1000 - (t - 7) * 60)));
+      }
+
+      // =====================================================
+      // SOLO
+      // =====================================================
+      if (!isMP) {
+        me = makeRunner(myId || 'me', myName, LANE_COLORS[0]);
+        runners = [me];
+        $('start-btn').addEventListener('click', () => { hide($('start-overlay')); startCountdown(); });
+        $('replay-btn').addEventListener('click', () => {
+          hide($('result-overlay'));
+          gameState = 'idle';
+          startCountdown();
+        });
+      }
+
+      // =====================================================
+      // MULTIJOUEUR
+      // =====================================================
+      let ws = null;
+      let mpTotal = 0;
+      let stateSentAt = 0;
+
+      function mpSend(payload) {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+      }
+
+      function maybeSendState(now) {
+        if (!isMP || me.finished) return;
+        if (now - stateSentAt < 80) return;   // ~12 Hz
+        stateSentAt = now;
+        mpSend({ type: 'relay', data: { type: 'chick-st', f: me.pos / TRACK_LEN, l: me.vis } });
+      }
+
+      function mpBuildRunners(players) {
+        runners = players.map((p, i) => makeRunner(p.id, p.name, LANE_COLORS[i % LANE_COLORS.length]));
+        me = runners.find(r => r.id === myId) || runners[0];
+        mpTotal = players.length;
+      }
+
+      let mpStarted = false;
+      function mpMaybeStart(connectedCount) {
+        if (mpStarted) return;
+        if (connectedCount >= mpTotal && mpTotal > 0) {
+          mpStarted = true;
+          hide($('mp-wait-overlay'));
+          startCountdown();
+        }
+      }
+
+      function mpHandle(msg) {
+        switch (msg.type) {
+          case 'game-connected':
+            if (msg.players) mpBuildRunners(msg.players);
+            $('mp-wait-msg').textContent = `${msg.connectedCount} / ${msg.total} poulets prêts…`;
+            mpMaybeStart(msg.connectedCount);
+            break;
+
+          case 'player-reconnected':
+            $('mp-wait-msg').textContent = `${msg.connectedCount} / ${mpTotal} poulets prêts…`;
+            mpMaybeStart(msg.connectedCount);
+            break;
+
+          case 'relay': {
+            const d = msg.data || {};
+            const r = runners.find(x => x.id === msg.from);
+            if (!r || r === me) break;
+            if (d.type === 'chick-st') {
+              r.pos = Math.min(TRACK_LEN, d.f * TRACK_LEN);
+              if (typeof d.l === 'number') { r.vis = d.l; r.lane = d.l > 0.5 ? 1 : 0; }
+            } else if (d.type === 'chick-fin') {
+              r.finished = true; r.pos = TRACK_LEN; r.time = d.t;
+            }
+            break;
+          }
+
+          case 'score-waiting':
+            if (!$('mp-done-overlay').classList.contains('hidden')) {
+              $('mp-done-msg').textContent = `Arrivée : ${msg.submitted}/${msg.total} poulets…`;
+            }
+            break;
+
+          case 'round-complete':
+            mpShowRanking(msg);
+            break;
+        }
+      }
+
+      const MEDALS = ['🥇', '🥈', '🥉'];
+      function mpShowRanking(msg) {
+        gameState = 'done';
+        tapZone.classList.remove('active');
+        $('hud').classList.remove('show');
+
+        const scores = msg.roundScores || {};
+        const players = (runners.length ? runners : (msg.players || []));
+        const sorted = [...players].sort((a, b) => (scores[a.id] ?? 0) - (scores[b.id] ?? 0));
+        const total = sorted.length;
+
+        const list = $('reveal-list');
+        list.innerHTML = '';
+        sorted.forEach((p, fromWorst) => {
+          const rankFromBest = total - 1 - fromWorst;
+          const entry = document.createElement('div');
+          entry.className = 'rp-entry' + (rankFromBest === 0 ? ' winner' : '');
+          entry.innerHTML = `
+            <span class="rp-rank">${MEDALS[rankFromBest] ?? (rankFromBest + 1) + '.'}</span>
+            <span class="rp-name">${escapeHtml(p.name)}${p.id === myId ? ' (toi)' : ''}</span>
+            <span class="rp-score">${scores[p.id] ?? 0} pts</span>
+          `;
+          list.appendChild(entry);
+        });
+
+        hide($('mp-done-overlay'));
+        hide($('reveal-continue-btn'));
+        show($('score-reveal-overlay'));
+
+        const entries = list.querySelectorAll('.rp-entry');
+        entries.forEach((entry, i) => {
+          setTimeout(() => {
+            entry.classList.add('visible');
+            if (i === entries.length - 1) setTimeout(() => show($('reveal-continue-btn')), 800);
+          }, 700 + i * 1000);
+        });
+        $('reveal-continue-btn').textContent = msg.hasMore ? 'Manche suivante →' : 'Retour au lobby →';
+      }
+
+      $('reveal-continue-btn').addEventListener('click', () => {
+        location.href = `/?room=${encodeURIComponent(roomCode)}&pid=${encodeURIComponent(myId)}`;
+      });
+
+      function mpConnect() {
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        ws = new WebSocket(`${proto}://${location.host}/ws`);
+        ws.addEventListener('open', () => {
+          ws.send(JSON.stringify({ type: 'game-connect', code: roomCode, playerId: myId }));
+        });
+        ws.addEventListener('message', (e) => {
+          let msg; try { msg = JSON.parse(e.data); } catch { return; }
+          mpHandle(msg);
+        });
+        ws.addEventListener('error', () => { $('mp-wait-msg').textContent = 'Erreur de connexion au serveur.'; });
+      }
+
+      // ---------- Init ----------
+      if (isMP) {
+        hide($('start-overlay'));
+        show($('mp-wait-overlay'));
+        $('mp-wait-msg').textContent = 'Connexion en cours…';
+        mpConnect();
+      }
+    })();
+    </script>
+  </body>
+</html>

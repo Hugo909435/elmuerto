@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>El Muerto — Chargé</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 100%; height: 100%; overflow: hidden;
+        background: #0c0f1a;
+        font-family: 'Trebuchet MS', system-ui, sans-serif;
+        color: #fff;
+        -webkit-user-select: none; user-select: none; touch-action: none;
+      }
+      #game { position: fixed; inset: 0; display: block; }
+
+      #home-btn {
+        position: fixed; top: max(14px, env(safe-area-inset-top)); left: 14px; z-index: 30;
+        display: flex; align-items: center; justify-content: center; text-decoration: none;
+        background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 50%; width: 44px; height: 44px; font-size: 20px; color: #fff;
+      }
+
+      /* Timer central de la charge */
+      #chargebar {
+        position: fixed; top: max(14px, env(safe-area-inset-top)); left: 50%;
+        transform: translateX(-50%); z-index: 12; pointer-events: none; text-align: center;
+        background: rgba(0,0,0,0.5); border: 2px solid rgba(255,255,255,0.12);
+        border-radius: 16px; padding: 8px 18px; min-width: 200px;
+      }
+      #chargebar.hidden { display: none; }
+      #chargebar .who { font-size: 13px; opacity: 0.85; }
+      #chargebar .who b { color: #ffd166; }
+      #chargebar .t { font-size: 30px; font-weight: 900; letter-spacing: 1px; line-height: 1.1; }
+      #chargebar.low .t { color: #ef4444; animation: pulse 0.5s infinite alternate; }
+      @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.12); } }
+
+      #hud {
+        position: fixed; bottom: max(120px, calc(env(safe-area-inset-bottom) + 120px));
+        left: 0; right: 0; display: flex; justify-content: center; gap: 7px;
+        flex-wrap: wrap; pointer-events: none; z-index: 10; padding: 0 14px;
+      }
+      #hud.hidden { display: none; }
+      .pill {
+        background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(6px);
+        border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 999px;
+        padding: 4px 11px; font-size: 13px; font-weight: 700; white-space: nowrap;
+        display: flex; align-items: center; gap: 6px;
+      }
+      .pill .nm { max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+      .pill.dead { opacity: 0.35; text-decoration: line-through; }
+      .pill.charged { border-color: #ffd166; box-shadow: 0 0 12px rgba(255,209,102,0.6); }
+
+      /* ----- Contrôles tactiles ----- */
+      #controls { position: fixed; inset: 0; z-index: 9; pointer-events: none; }
+      #controls.hidden { display: none; }
+      #stick-zone { position: absolute; left: 0; top: 0; bottom: 0; width: 52%; pointer-events: auto; }
+      #stick { position: absolute; width: 130px; height: 130px; border-radius: 50%;
+        border: 2px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.05);
+        transform: translate(-50%, -50%); display: none; }
+      #stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px;
+        border-radius: 50%; background: rgba(255,255,255,0.35); transform: translate(-50%,-50%); }
+
+      .ctl-btn {
+        position: absolute; pointer-events: auto; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center; text-align: center;
+        font-weight: 900; text-transform: uppercase; color: #fff; line-height: 1.05;
+        border: 2px solid rgba(255,255,255,0.2); -webkit-tap-highlight-color: transparent;
+      }
+      .ctl-btn:active { transform: scale(0.94); filter: brightness(1.15); }
+      #btn-go {
+        right: max(22px, env(safe-area-inset-right)); bottom: max(26px, calc(env(safe-area-inset-bottom) + 26px));
+        width: 116px; height: 116px; font-size: 17px;
+        background: radial-gradient(circle at 50% 35%, #38bdf8, #1d4ed8);
+      }
+      #btn-fire {
+        right: max(150px, calc(env(safe-area-inset-right) + 150px));
+        bottom: max(40px, calc(env(safe-area-inset-bottom) + 40px));
+        width: 84px; height: 84px; font-size: 15px;
+        background: radial-gradient(circle at 50% 35%, #fca5a5, #dc2626);
+      }
+      #btn-fire.off { opacity: 0.3; pointer-events: none; }
+
+      .overlay {
+        position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; text-align: center; padding: 28px;
+        background: radial-gradient(900px 700px at 50% 0%, rgba(40,60,120,0.5), transparent 60%),
+                    rgba(6, 8, 16, 0.93); backdrop-filter: blur(4px);
+      }
+      .overlay.hidden { display: none; }
+      .overlay h1 { font-size: clamp(26px, 7vw, 44px); margin-bottom: 12px; letter-spacing: 1px; }
+      .overlay p { opacity: 0.85; font-size: clamp(14px, 3.6vw, 17px); max-width: 460px; line-height: 1.55; margin-bottom: 18px; }
+      .overlay .big { font-size: clamp(20px, 6vw, 30px); font-weight: 800; color: #ffd166; margin-bottom: 8px; }
+
+      .btn {
+        cursor: pointer; border: none; border-radius: 999px; padding: 15px 30px;
+        font-size: 16px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+        font-family: inherit; background: linear-gradient(180deg, #38bdf8, #1d4ed8); color: #04122b;
+      }
+      .btn:active { transform: scale(0.96); }
+      .btn.hidden { display: none; }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+      ul#mp-players { list-style: none; width: 100%; max-width: 340px; margin-bottom: 16px; }
+      .player { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+        background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px; margin-bottom: 8px; }
+      .player .dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+      .player .pname { flex: 1; font-weight: 600; text-align: left; }
+      .player .off { font-size: 11px; opacity: 0.5; }
+
+      #end-list, #reveal-list { width: 100%; max-width: 340px; margin-bottom: 18px; }
+      .end-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+        background: rgba(0,0,0,0.25); border-radius: 10px; margin-bottom: 6px; opacity: 0; transform: translateY(8px);
+        transition: opacity .35s, transform .35s; }
+      .end-row.visible { opacity: 1; transform: none; }
+      .end-row.winner { background: rgba(255,209,102,0.18); }
+      .end-row .rk { width: 30px; font-size: 18px; text-align: center; }
+      .end-row .nm { flex: 1; text-align: left; font-weight: 600; }
+      .end-row .pts { opacity: 0.8; font-size: 13px; }
+
+      #toast {
+        position: fixed; top: 38%; left: 50%; transform: translate(-50%, -50%);
+        z-index: 15; font-size: clamp(26px, 8vw, 52px); font-weight: 900; pointer-events: none;
+        text-shadow: 0 4px 20px rgba(0,0,0,0.6); opacity: 0; transition: opacity 0.2s; text-align: center;
+      }
+      #toast.show { opacity: 1; }
+
+      #err { position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+        background: #b91c1c; padding: 12px 22px; border-radius: 12px; font-size: 14px;
+        font-weight: 600; z-index: 100; max-width: 90vw; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <a id="home-btn" href="/" aria-label="Retour">←</a>
+
+    <div id="chargebar" class="hidden">
+      <div class="who"></div>
+      <div class="t">20</div>
+    </div>
+
+    <div id="hud" class="hidden"></div>
+
+    <!-- Contrôles tactiles -->
+    <div id="controls" class="hidden">
+      <div id="stick-zone"><div id="stick"><div class="knob"></div></div></div>
+      <div id="btn-fire" class="ctl-btn">Tir</div>
+      <div id="btn-go" class="ctl-btn">Avance</div>
+    </div>
+
+    <div id="toast"></div>
+
+    <!-- Salle d'attente multijoueur -->
+    <div id="mp-overlay" class="overlay hidden">
+      <h1>⚡ Chargé !</h1>
+      <p id="mp-sub">Connexion à la partie…</p>
+      <ul id="mp-players"></ul>
+      <p id="mp-wait" style="opacity:.7">En attente des autres joueurs…</p>
+    </div>
+
+    <!-- Écran de départ solo -->
+    <div id="start-overlay" class="overlay hidden">
+      <h1>⚡ CHARGÉ</h1>
+      <p>Le <b>chargé</b> brille et va plus vite : il doit <b>percuter</b> un autre joueur pour lui refiler la charge.<br />
+      Les autres <b>tirent pour le repousser</b>. Au bout de <b>20 s</b>, le chargé est <b>éliminé</b> !<br />
+      <b>Joystick</b> à gauche pour viser, <b>Avance</b> pour foncer, <b>Tir</b> pour repousser.</p>
+      <button id="start-btn" class="btn">Jouer contre des bots</button>
+    </div>
+
+    <!-- Attente résultats (MP) -->
+    <div id="mp-done-overlay" class="overlay hidden">
+      <h1 id="mp-done-title">Fin de la manche</h1>
+      <p class="big" id="mp-done-sub"></p>
+      <p id="mp-done-msg" style="opacity:.7">En attente des autres joueurs…</p>
+    </div>
+
+    <!-- Révélation des scores (MP) -->
+    <div id="reveal-overlay" class="overlay hidden">
+      <h1>Classement</h1>
+      <div id="reveal-list"></div>
+      <button id="reveal-continue-btn" class="btn hidden">Continuer →</button>
+    </div>
+
+    <!-- Fin de manche solo -->
+    <div id="end-overlay" class="overlay hidden">
+      <h1 id="end-title">Fin de la manche</h1>
+      <p class="big" id="end-sub"></p>
+      <div id="end-list"></div>
+      <div class="row">
+        <button id="rematch-btn" class="btn">Rejouer ⚡</button>
+      </div>
+    </div>
+
+    <script>
+      'use strict';
+
+      // ====================================================================
+      //  EL MUERTO — CHARGÉ (« patate chaude »)
+      //  Un joueur est « chargé » : il brille, va plus vite et doit percuter
+      //  un autre joueur pour lui refiler la charge. Les autres tirent pour
+      //  le repousser. Au bout de 20 s, le chargé est éliminé. Dernier debout
+      //  gagne. Contrôles : joystick (viser) + bouton Avance + bouton Tir.
+      //
+      //  Réseau : handshake « game-connect » du tournoi (comme chickenrun) +
+      //  relay temps réel des positions/tirs. L'HÔTE est autoritaire sur l'état
+      //  de la charge (qui est chargé, timer, transferts, éliminations) et le
+      //  diffuse ; les autres clients le rendent. Chaque client simule son
+      //  propre déplacement et envoie sa position.
+      // ====================================================================
+
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const $ = (id) => document.getElementById(id);
+
+      // ---- Identité / salon ----
+      const params = new URLSearchParams(location.search);
+      const ROOM = params.get('room');
+      const MY_PID = params.get('pid') || (() => { try { return localStorage.getItem('emarcade-pid'); } catch { return null; } })();
+      const MY_NAME = (params.get('name') || (() => { try { return localStorage.getItem('emarcade-name'); } catch { return ''; } })() || 'Joueur').slice(0, 16);
+      let MP = !!(ROOM && MY_PID);
+
+      const COLORS = ['#4ade80', '#ef4444', '#3b82f6', '#f59e0b', '#a855f7', '#ec4899', '#14b8a6', '#f97316'];
+
+      // ---- Constantes ----
+      const ARENA_W = 2200, ARENA_H = 1400;
+      const PLAYER_R = 26;
+      const MOVE_SPEED = 235;          // px/s déplacement normal
+      const CHARGED_MULT = 1.42;       // le chargé va plus vite
+      const TURN_KEYS = 3.2;           // rad/s rotation clavier
+      const BULLET_SPEED = 620, BULLET_R = 7, BULLET_LIFE = 1.3;
+      const FIRE_COOLDOWN = 0.32;
+      const KNOCKBACK = 280;           // impulsion appliquée au chargé touché
+      const CHARGE_TIME = 20;          // s avant élimination du chargé
+      const TRANSFER_DIST = PLAYER_R * 2 + 8;
+      const TRANSFER_GRACE = 1.3;      // s d'immunité après un transfert
+      const NET_HZ = 15;
+
+      const WALLS = [
+        { x: 900, y: 240, w: 400, h: 70 },
+        { x: 900, y: 1090, w: 400, h: 70 },
+        { x: 240, y: 600, w: 70, h: 200 },
+        { x: 1890, y: 600, w: 70, h: 200 },
+        { x: 1030, y: 630, w: 140, h: 140 },
+        { x: 520, y: 300, w: 80, h: 80 },
+        { x: 1600, y: 1020, w: 80, h: 80 },
+        { x: 520, y: 1020, w: 80, h: 80 },
+        { x: 1600, y: 300, w: 80, h: 80 },
+      ];
+      const SPAWNS = [
+        { x: 160, y: 160 }, { x: 2040, y: 1240 }, { x: 2040, y: 160 }, { x: 160, y: 1240 },
+        { x: 1100, y: 150 }, { x: 1100, y: 1250 }, { x: 160, y: 700 }, { x: 2040, y: 700 },
+      ];
+
+      // ---- État ----
+      let net = null, myId = MP ? MY_PID : 'me', amHost = false;
+      let state = 'boot';              // boot | mpwait | countdown | playing | done
+      const players = new Map();       // id -> player (inclut le mien)
+      let me = null;
+      const bullets = [];              // mes balles (arbitrage local)
+      const ghostBullets = [];         // balles cosmétiques des pairs
+      const particles = [];
+      let countdown = 0, netAccum = 0, csAccum = 0;
+
+      // Charge (état de jeu partagé)
+      let chargedId = null;
+      let chargeTimer = CHARGE_TIME;
+      let elimOrder = [];              // ids dans l'ordre d'élimination
+      let winnerId = null;
+
+      function makePlayer(id, slot, name, isMe, isBot) {
+        const sp = SPAWNS[slot % SPAWNS.length];
+        return {
+          id, name, slot, isMe: !!isMe, isBot: !!isBot,
+          color: COLORS[slot % COLORS.length],
+          x: sp.x, y: sp.y, angle: Math.random() * Math.PI * 2,
+          vx: 0, vy: 0, alive: true, grace: 0, fireCd: 0,
+          tx: sp.x, ty: sp.y, tangle: 0,
+          aiTimer: 0, aiFire: 0,
+        };
+      }
+
+      function resizeCanvas() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(innerWidth * dpr);
+        canvas.height = Math.floor(innerHeight * dpr);
+        canvas.style.width = innerWidth + 'px';
+        canvas.style.height = innerHeight + 'px';
+      }
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
+
+      function viewTransform() {
+        const vw = canvas.width, vh = canvas.height;
+        const scale = Math.min(vw / ARENA_W, vh / ARENA_H) * 0.97;
+        const ox = (vw - ARENA_W * scale) / 2;
+        const oy = (vh - ARENA_H * scale) / 2;
+        return { scale, ox, oy };
+      }
+
+      // ====================================================================
+      //  CONTRÔLES — joystick (viser) + bouton Avance + bouton Tir
+      // ====================================================================
+      let aimActive = false, aimAngle = 0;
+      let goPressed = false;
+      let keyUp = false, keyLeft = false, keyRight = false;
+      let stickId = null, stickOx = 0, stickOy = 0;
+      const stickEl = $('stick');
+
+      const stickZone = $('stick-zone');
+      stickZone.addEventListener('pointerdown', (e) => {
+        if (stickId !== null) return;
+        stickId = e.pointerId;
+        stickOx = e.clientX; stickOy = e.clientY;
+        stickEl.style.left = e.clientX + 'px';
+        stickEl.style.top = e.clientY + 'px';
+        stickEl.style.display = 'block';
+        moveStickKnob(0, 0);
+        try { stickZone.setPointerCapture(e.pointerId); } catch {}
+      });
+      stickZone.addEventListener('pointermove', (e) => {
+        if (e.pointerId !== stickId) return;
+        let dx = e.clientX - stickOx, dy = e.clientY - stickOy;
+        const d = Math.hypot(dx, dy);
+        if (d > 14) { aimActive = true; aimAngle = Math.atan2(dy, dx); }
+        const max = 52, k = d > max ? max / d : 1;
+        moveStickKnob(dx * k, dy * k);
+      });
+      function endStick(e) {
+        if (e.pointerId !== stickId) return;
+        stickId = null; aimActive = false; stickEl.style.display = 'none';
+      }
+      stickZone.addEventListener('pointerup', endStick);
+      stickZone.addEventListener('pointercancel', endStick);
+      function moveStickKnob(dx, dy) {
+        const k = stickEl.querySelector('.knob');
+        k.style.left = (65 + dx) + 'px';
+        k.style.top = (65 + dy) + 'px';
+      }
+
+      const goBtn = $('btn-go');
+      const press = (el, on) => {
+        el.addEventListener('pointerdown', (e) => { e.preventDefault(); on(true); try { el.setPointerCapture(e.pointerId); } catch {} });
+        el.addEventListener('pointerup', (e) => { e.preventDefault(); on(false); });
+        el.addEventListener('pointercancel', () => on(false));
+        el.addEventListener('lostpointercapture', () => on(false));
+      };
+      press(goBtn, (v) => { goPressed = v; });
+      $('btn-fire').addEventListener('pointerdown', (e) => { e.preventDefault(); if (me) fire(me); });
+
+      // Clavier (test PC)
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        if (e.code === 'ArrowUp' || e.code === 'KeyW') keyUp = true;
+        else if (e.code === 'ArrowLeft' || e.code === 'KeyA') keyLeft = true;
+        else if (e.code === 'ArrowRight' || e.code === 'KeyD') keyRight = true;
+        else if (e.code === 'Space') { e.preventDefault(); if (me) fire(me); }
+      });
+      window.addEventListener('keyup', (e) => {
+        if (e.code === 'ArrowUp' || e.code === 'KeyW') keyUp = false;
+        else if (e.code === 'ArrowLeft' || e.code === 'KeyA') keyLeft = false;
+        else if (e.code === 'ArrowRight' || e.code === 'KeyD') keyRight = false;
+      });
+
+      function fire(p) {
+        if (!p || !p.alive || p.fireCd > 0) return;
+        if (p.id === chargedId) return;          // le chargé ne tire pas
+        p.fireCd = FIRE_COOLDOWN;
+        const bx = p.x + Math.cos(p.angle) * (PLAYER_R + 6);
+        const by = p.y + Math.sin(p.angle) * (PLAYER_R + 6);
+        bullets.push({ x: bx, y: by, vx: Math.cos(p.angle) * BULLET_SPEED, vy: Math.sin(p.angle) * BULLET_SPEED, life: BULLET_LIFE, owner: p.id });
+        spawnMuzzle(bx, by, p.angle, p.color);
+        if (MP && p.isMe) relay({ k: 'shot', x: bx, y: by, a: p.angle, c: p.color });
+      }
+
+      // ====================================================================
+      //  BOUCLE
+      // ====================================================================
+      let last = performance.now();
+      function loop(now) {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        if (state === 'playing' || state === 'countdown') update(dt);
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      function update(dt) {
+        if (state === 'countdown') {
+          countdown -= dt;
+          if (countdown <= 0) {
+            state = 'playing';
+            $('controls').classList.remove('hidden');
+            if (!MP || amHost) startCharge();
+          }
+        }
+
+        for (const p of players.values()) {
+          if (p.fireCd > 0) p.fireCd -= dt;
+          if (p.grace > 0) p.grace -= dt;
+          if (!p.alive) continue;
+
+          if (p.isMe) updateMe(p, dt);
+          else if (p.isBot) updateBot(p, dt);
+          else {
+            // pair distant : interpolation vers la dernière position reçue
+            p.x += (p.tx - p.x) * Math.min(1, 16 * dt);
+            p.y += (p.ty - p.y) * Math.min(1, 16 * dt);
+            p.angle = lerpAng(p.angle, p.tangle, Math.min(1, 16 * dt));
+          }
+        }
+
+        updateBullets(bullets, dt, true);
+        updateBullets(ghostBullets, dt, false);
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const pp = particles[i];
+          pp.x += pp.vx * dt; pp.y += pp.vy * dt; pp.vx *= 0.92; pp.vy *= 0.92; pp.life -= dt;
+          if (pp.life <= 0) particles.splice(i, 1);
+        }
+
+        // Logique de charge (hôte autoritaire en MP, local en solo)
+        if (state === 'playing' && (!MP || amHost)) hostChargeLogic(dt);
+
+        // Réseau : ma position
+        if (MP && me) {
+          netAccum += dt;
+          if (netAccum >= 1 / NET_HZ) {
+            netAccum = 0;
+            relay({ k: 'pos', x: Math.round(me.x), y: Math.round(me.y), a: +me.angle.toFixed(2), al: me.alive ? 1 : 0 });
+          }
+          // Diffusion de l'état de charge par l'hôte
+          if (amHost) {
+            csAccum += dt;
+            if (csAccum >= 0.08) { csAccum = 0; broadcastCharge(); }
+          }
+        }
+
+        updateChargeUI();
+      }
+
+      function updateMe(p, dt) {
+        if (keyLeft) p.angle -= TURN_KEYS * dt;
+        if (keyRight) p.angle += TURN_KEYS * dt;
+        if (aimActive) p.angle = lerpAng(p.angle, aimAngle, Math.min(1, 20 * dt));
+
+        if (goPressed || keyUp) {
+          const sp = MOVE_SPEED * (p.id === chargedId ? CHARGED_MULT : 1);
+          p.x += Math.cos(p.angle) * sp * dt;
+          p.y += Math.sin(p.angle) * sp * dt;
+        }
+        // knockback (décroît)
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        const fr = Math.max(0, 1 - 5 * dt);
+        p.vx *= fr; p.vy *= fr;
+
+        p.x = Math.max(PLAYER_R, Math.min(ARENA_W - PLAYER_R, p.x));
+        p.y = Math.max(PLAYER_R, Math.min(ARENA_H - PLAYER_R, p.y));
+        resolveWalls(p);
+      }
+
+      function resolveWalls(p) {
+        for (const w of WALLS) {
+          const cx = Math.max(w.x, Math.min(p.x, w.x + w.w));
+          const cy = Math.max(w.y, Math.min(p.y, w.y + w.h));
+          let dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy);
+          if (d < PLAYER_R) {
+            if (d === 0) { dx = 1; dy = 0; d = 1; }
+            p.x += (dx / d) * (PLAYER_R - d);
+            p.y += (dy / d) * (PLAYER_R - d);
+          }
+        }
+      }
+
+      function updateBullets(arr, dt, mine) {
+        for (let i = arr.length - 1; i >= 0; i--) {
+          const b = arr[i];
+          b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+          let gone = b.life <= 0 || b.x < 0 || b.y < 0 || b.x > ARENA_W || b.y > ARENA_H;
+          if (!gone && hitsWall(b.x, b.y)) { spawnSpark(b.x, b.y); gone = true; }
+          // Les balles ne repoussent que le chargé.
+          if (!gone && mine && chargedId) {
+            const t = players.get(chargedId);
+            if (t && t.alive && t.id !== b.owner && Math.hypot(t.x - b.x, t.y - b.y) < PLAYER_R + BULLET_R) {
+              applyPush(t, b.vx, b.vy);
+              spawnSpark(b.x, b.y);
+              if (MP && me && b.owner === me.id) relay({ k: 'push', id: t.id, dx: b.vx, dy: b.vy });
+              gone = true;
+            }
+          }
+          if (gone) arr.splice(i, 1);
+        }
+      }
+
+      function applyPush(t, vx, vy) {
+        const d = Math.hypot(vx, vy) || 1;
+        // Seul le propriétaire du corps applique réellement la poussée à sa
+        // simulation ; pour les autres c'est purement cosmétique.
+        if (t.isMe || t.isBot) { t.vx += (vx / d) * KNOCKBACK; t.vy += (vy / d) * KNOCKBACK; }
+      }
+
+      function hitsWall(x, y) {
+        for (const w of WALLS) {
+          if (x > w.x - BULLET_R && x < w.x + w.w + BULLET_R && y > w.y - BULLET_R && y < w.y + w.h + BULLET_R) return true;
+        }
+        return false;
+      }
+
+      // ====================================================================
+      //  LOGIQUE DE CHARGE (autoritaire : hôte en MP, local en solo)
+      // ====================================================================
+      function aliveList() { return [...players.values()].filter((p) => p.alive); }
+
+      function startCharge() {
+        const alive = aliveList();
+        if (!alive.length) return;
+        chargedId = alive[Math.floor(Math.random() * alive.length)].id;
+        chargeTimer = CHARGE_TIME;
+        const c = players.get(chargedId);
+        if (c) c.grace = TRANSFER_GRACE;
+        if (MP && amHost) broadcastCharge();
+      }
+
+      function hostChargeLogic(dt) {
+        if (winnerId) return;
+        const charged = players.get(chargedId);
+        if (!charged || !charged.alive) { assignNextCharged(); return; }
+
+        chargeTimer -= dt;
+
+        // Transfert au contact
+        if (charged.grace <= 0) {
+          for (const o of players.values()) {
+            if (o.id === chargedId || !o.alive || o.grace > 0) continue;
+            if (Math.hypot(o.x - charged.x, o.y - charged.y) < TRANSFER_DIST) {
+              transferCharge(o.id);
+              break;
+            }
+          }
+        }
+
+        // Timer écoulé -> élimination
+        if (chargeTimer <= 0) {
+          eliminate(chargedId);
+          const alive = aliveList();
+          if (alive.length <= 1) {
+            winnerId = alive[0] ? alive[0].id : null;
+            chargedId = null;
+          } else {
+            assignNextCharged();
+          }
+        }
+      }
+
+      function transferCharge(toId) {
+        chargedId = toId;
+        chargeTimer = CHARGE_TIME;
+        const n = players.get(toId);
+        if (n) n.grace = TRANSFER_GRACE;
+        spawnTransferFx(n);
+      }
+
+      function assignNextCharged() {
+        const alive = aliveList();
+        if (alive.length <= 1) { winnerId = alive[0] ? alive[0].id : null; chargedId = null; return; }
+        chargedId = alive[Math.floor(Math.random() * alive.length)].id;
+        chargeTimer = CHARGE_TIME;
+        const c = players.get(chargedId);
+        if (c) c.grace = TRANSFER_GRACE;
+      }
+
+      function eliminate(id) {
+        const p = players.get(id);
+        if (!p || !p.alive) return;
+        p.alive = false;
+        if (!elimOrder.includes(id)) elimOrder.push(id);
+        spawnExplosion(p.x, p.y, p.color);
+        if (p.isMe) showToast('☠️ Éliminé !', '#ef4444');
+        renderHud();
+      }
+
+      function broadcastCharge() {
+        relay({ k: 'cs', c: chargedId, t: +chargeTimer.toFixed(2), el: elimOrder.slice(), w: winnerId });
+      }
+
+      // Réception de l'état de charge (clients non-hôtes)
+      function onChargeState(d) {
+        chargedId = d.c;
+        chargeTimer = d.t;
+        if (Array.isArray(d.el)) {
+          for (const id of d.el) {
+            const p = players.get(id);
+            if (p && p.alive) { p.alive = false; spawnExplosion(p.x, p.y, p.color); if (p.isMe) showToast('☠️ Éliminé !', '#ef4444'); }
+          }
+          elimOrder = d.el.slice();
+          renderHud();
+        }
+        if (d.w && !winnerId) { winnerId = d.w; }
+      }
+
+      function checkEnd() {
+        if (state !== 'playing') return;
+        if (winnerId || (players.size >= 2 && aliveList().length <= 1)) {
+          if (!winnerId) { const a = aliveList()[0]; winnerId = a ? a.id : null; }
+          endMatch();
+        }
+      }
+
+      // ====================================================================
+      //  IA (mode solo)
+      // ====================================================================
+      function updateBot(p, dt) {
+        p.aiTimer -= dt; p.aiFire -= dt;
+        const charged = chargedId ? players.get(chargedId) : null;
+
+        if (p.id === chargedId) {
+          // Chargé : foncer sur la cible la plus proche pour la percuter
+          const target = nearestOther(p);
+          if (target) p.angle = lerpAng(p.angle, Math.atan2(target.y - p.y, target.x - p.x), Math.min(1, 6 * dt));
+          driveBot(p, dt, true);
+        } else if (charged) {
+          const dx = p.x - charged.x, dy = p.y - charged.y, dist = Math.hypot(dx, dy);
+          if (dist < 420) {
+            // Trop près : viser le chargé et tirer, tout en reculant
+            p.angle = lerpAng(p.angle, Math.atan2(charged.y - p.y, charged.x - p.x), Math.min(1, 8 * dt));
+            if (p.aiFire <= 0) { fire(p); p.aiFire = 0.4 + Math.random() * 0.4; }
+            // fuir : se déplacer dans le sens opposé
+            const flee = Math.atan2(dy, dx);
+            p.x += Math.cos(flee) * MOVE_SPEED * dt;
+            p.y += Math.sin(flee) * MOVE_SPEED * dt;
+          } else {
+            if (p.aiTimer <= 0) { p.aiTimer = 0.6 + Math.random() * 1.0; p.angle += (Math.random() - 0.5) * 1.6; }
+            driveBot(p, dt, false);
+          }
+        } else {
+          driveBot(p, dt, false);
+        }
+
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        const fr = Math.max(0, 1 - 5 * dt); p.vx *= fr; p.vy *= fr;
+        p.x = Math.max(PLAYER_R, Math.min(ARENA_W - PLAYER_R, p.x));
+        p.y = Math.max(PLAYER_R, Math.min(ARENA_H - PLAYER_R, p.y));
+        resolveWalls(p);
+      }
+      function driveBot(p, dt, fast) {
+        const sp = MOVE_SPEED * (fast ? CHARGED_MULT : 0.85);
+        p.x += Math.cos(p.angle) * sp * dt;
+        p.y += Math.sin(p.angle) * sp * dt;
+      }
+      function nearestOther(p) {
+        let best = null, bd = Infinity;
+        for (const o of players.values()) {
+          if (o.id === p.id || !o.alive) continue;
+          const d = Math.hypot(o.x - p.x, o.y - p.y);
+          if (d < bd) { bd = d; best = o; }
+        }
+        return best;
+      }
+
+      // ====================================================================
+      //  PARTICULES
+      // ====================================================================
+      function spawnExplosion(x, y, color) {
+        for (let i = 0; i < 20; i++) {
+          const a = Math.random() * Math.PI * 2, s = 80 + Math.random() * 280;
+          particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.4 + Math.random() * 0.4, color: Math.random() < 0.5 ? color : '#ffce54', r: 2 + Math.random() * 4 });
+        }
+      }
+      function spawnTransferFx(p) {
+        if (!p) return;
+        for (let i = 0; i < 16; i++) {
+          const a = Math.random() * Math.PI * 2, s = 120 + Math.random() * 200;
+          particles.push({ x: p.x, y: p.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.35, color: '#fde047', r: 2 + Math.random() * 3 });
+        }
+      }
+      function spawnMuzzle(x, y, ang, color) {
+        for (let i = 0; i < 5; i++) {
+          const a = ang + (Math.random() - 0.5) * 0.5, s = 120 + Math.random() * 160;
+          particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.16, color: '#ffe27a', r: 1.5 + Math.random() * 2 });
+        }
+      }
+      function spawnSpark(x, y) {
+        for (let i = 0; i < 5; i++) {
+          const a = Math.random() * Math.PI * 2, s = 60 + Math.random() * 140;
+          particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.22, color: '#cbd5e1', r: 1.5 });
+        }
+      }
+
+      // ====================================================================
+      //  RENDU
+      // ====================================================================
+      function render() {
+        const { scale, ox, oy } = viewTransform();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = '#0c0f1a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.setTransform(scale, 0, 0, scale, ox, oy);
+
+        ctx.fillStyle = '#171c2b';
+        ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 2;
+        for (let gx = 0; gx <= ARENA_W; gx += 80) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, ARENA_H); ctx.stroke(); }
+        for (let gy = 0; gy <= ARENA_H; gy += 80) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(ARENA_W, gy); ctx.stroke(); }
+        ctx.strokeStyle = '#314066'; ctx.lineWidth = 8;
+        ctx.strokeRect(4, 4, ARENA_W - 8, ARENA_H - 8);
+
+        for (const w of WALLS) {
+          ctx.fillStyle = '#2a3147';
+          ctx.fillRect(w.x, w.y, w.w, w.h);
+          ctx.strokeStyle = '#4a5680'; ctx.lineWidth = 3;
+          ctx.strokeRect(w.x, w.y, w.w, w.h);
+        }
+
+        for (const b of bullets) drawBullet(b);
+        for (const b of ghostBullets) drawBullet(b);
+
+        for (const p of players.values()) if (p.alive) drawPlayer(p);
+
+        for (const pp of particles) {
+          ctx.globalAlpha = Math.max(0, pp.life * 2.2);
+          ctx.fillStyle = pp.color;
+          ctx.beginPath(); ctx.arc(pp.x, pp.y, pp.r, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function drawBullet(b) {
+        ctx.fillStyle = '#ffe27a';
+        ctx.beginPath(); ctx.arc(b.x, b.y, BULLET_R, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,160,40,0.6)'; ctx.lineWidth = 2; ctx.stroke();
+      }
+
+      function drawPlayer(p) {
+        const isCharged = p.id === chargedId;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+
+        if (isCharged) {
+          // aura électrique pulsée
+          const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 90);
+          ctx.globalAlpha = 0.35 + 0.35 * pulse;
+          ctx.fillStyle = '#fde047';
+          ctx.beginPath(); ctx.arc(0, 0, PLAYER_R + 12 + pulse * 8, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+
+        ctx.rotate(p.angle);
+        // corps
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(0, 0, PLAYER_R, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = isCharged ? '#fff7cc' : 'rgba(0,0,0,0.45)';
+        ctx.lineWidth = isCharged ? 4 : 2; ctx.stroke();
+        // canon / nez directionnel
+        ctx.fillStyle = isCharged ? '#fde047' : '#10131f';
+        ctx.fillRect(0, -5, PLAYER_R + 12, 10);
+        // dôme
+        ctx.fillStyle = shade(p.color, isCharged ? 40 : -25);
+        ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+
+        if (isCharged) {
+          ctx.font = '22px sans-serif'; ctx.textAlign = 'center';
+          ctx.fillText('⚡', p.x, p.y - PLAYER_R - 22);
+        }
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 18px Trebuchet MS, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText((p.isMe ? '▸ ' : '') + p.name, p.x, p.y - PLAYER_R - 4);
+        ctx.textAlign = 'left';
+      }
+
+      function shade(hex, amt) {
+        const n = parseInt(hex.slice(1), 16);
+        let r = (n >> 16) + amt, g = ((n >> 8) & 255) + amt, b = (n & 255) + amt;
+        r = Math.max(0, Math.min(255, r)); g = Math.max(0, Math.min(255, g)); b = Math.max(0, Math.min(255, b));
+        return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+      }
+
+      // ====================================================================
+      //  HUD / overlays
+      // ====================================================================
+      function updateChargeUI() {
+        const bar = $('chargebar');
+        if (state !== 'playing' || !chargedId) { bar.classList.add('hidden'); return; }
+        bar.classList.remove('hidden');
+        const c = players.get(chargedId);
+        bar.querySelector('.who').innerHTML = '⚡ Chargé : <b>' + escapeHtml(c ? (c.isMe ? 'TOI !' : c.name) : '?') + '</b>';
+        bar.querySelector('.t').textContent = Math.max(0, Math.ceil(chargeTimer));
+        bar.classList.toggle('low', chargeTimer <= 5);
+        // bouton tir désactivé si je suis chargé
+        $('btn-fire').classList.toggle('off', !!(me && me.id === chargedId));
+
+        checkEnd();
+      }
+
+      function renderHud() {
+        const hud = $('hud');
+        hud.innerHTML = '';
+        const list = [...players.values()].sort((a, b) => a.slot - b.slot);
+        for (const p of list) {
+          const pill = document.createElement('div');
+          pill.className = 'pill' + (!p.alive ? ' dead' : '') + (p.id === chargedId ? ' charged' : '');
+          pill.innerHTML = `<span class="dot" style="width:9px;height:9px;border-radius:50%;display:inline-block;background:${p.color}"></span>` +
+            `<span class="nm">${escapeHtml(p.name)}${p.isMe ? ' (toi)' : ''}</span>` +
+            (p.alive ? '' : '<span>☠️</span>');
+          hud.appendChild(pill);
+        }
+      }
+
+      let toastTimer = null;
+      function showToast(text, color) {
+        const el = $('toast');
+        el.textContent = text; el.style.color = color || '#fff';
+        el.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove('show'), 1100);
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+
+      function startCountdown() {
+        state = 'countdown'; countdown = 3.2;
+        elimOrder = []; winnerId = null; chargedId = null;
+        $('mp-overlay').classList.add('hidden');
+        $('start-overlay').classList.add('hidden');
+        $('end-overlay').classList.add('hidden');
+        $('mp-done-overlay').classList.add('hidden');
+        $('reveal-overlay').classList.add('hidden');
+        $('hud').classList.remove('hidden');
+        renderHud();
+        let n = 3; showToast(n, '#ffd166');
+        const iv = setInterval(() => {
+          n--;
+          if (n > 0) showToast(n, '#ffd166');
+          else if (n === 0) showToast('GO !', '#4ade80');
+          else clearInterval(iv);
+        }, 800);
+      }
+
+      // ---- Classement final ----
+      function finalRanking() {
+        // meilleur -> pire : [gagnant, derniers éliminés ... premiers éliminés]
+        const order = [];
+        if (winnerId) order.push(winnerId);
+        for (const id of elimOrder.slice().reverse()) if (!order.includes(id)) order.push(id);
+        for (const p of players.values()) if (!order.includes(p.id)) order.push(p.id);
+        return order;
+      }
+      function myScore() {
+        const order = finalRanking();
+        const N = order.length;
+        const idx = order.indexOf(myId);
+        return idx < 0 ? 0 : (N - idx) * 100;
+      }
+
+      function endMatch() {
+        if (state === 'done') return;
+        state = 'done';
+        goPressed = false; aimActive = false;
+        $('controls').classList.add('hidden');
+        $('chargebar').classList.add('hidden');
+
+        if (MP) {
+          const w = players.get(winnerId);
+          $('mp-done-title').textContent = (winnerId === myId) ? '🏆 Victoire !' : 'Manche terminée';
+          $('mp-done-sub').textContent = w ? `${w.name} survit !` : '';
+          $('mp-done-msg').textContent = 'En attente des autres joueurs…';
+          $('mp-done-overlay').classList.remove('hidden');
+          mpSend({ type: 'game-score', score: myScore() });
+        } else {
+          const w = players.get(winnerId);
+          $('end-title').textContent = (winnerId === 'me') ? '🏆 Tu survis !' : 'Manche terminée';
+          $('end-sub').textContent = w ? `${escapeHtml(w.name)} n'a jamais fini chargé` : '';
+          const order = finalRanking();
+          $('end-list').innerHTML = order.map((id, i) => {
+            const p = players.get(id); if (!p) return '';
+            return `<div class="end-row visible${i === 0 ? ' winner' : ''}"><span class="rk">${['🥇','🥈','🥉'][i] || (i + 1) + '.'}</span>` +
+              `<span class="nm" style="color:${p.color}">${escapeHtml(p.name)}${p.isMe ? ' (toi)' : ''}</span></div>`;
+          }).join('');
+          $('end-overlay').classList.remove('hidden');
+        }
+      }
+
+      // ====================================================================
+      //  MODE SOLO
+      // ====================================================================
+      function startSolo() {
+        MP = false; myId = 'me';
+        players.clear(); bullets.length = 0; ghostBullets.length = 0; particles.length = 0;
+        me = makePlayer('me', 0, MY_NAME, true, false);
+        players.set('me', me);
+        const names = ['Volt', 'Ampère', 'Tesla', 'Watt', 'Ohm'];
+        for (let i = 1; i <= 3; i++) players.set('bot' + i, makePlayer('bot' + i, i, names[i - 1], false, true));
+        startCountdown();
+      }
+
+      $('start-btn').addEventListener('click', startSolo);
+      $('rematch-btn').addEventListener('click', startSolo);
+
+      // ====================================================================
+      //  MULTIJOUEUR (handshake « game-connect » + relay)
+      // ====================================================================
+      let mpTotal = 0, mpStarted = false, roster = [];
+
+      function mpSend(o) { if (net && net.readyState === 1) net.send(JSON.stringify(o)); }
+      function relay(data) { mpSend({ type: 'relay', data }); }
+
+      function mpConnect() {
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        net = new WebSocket(`${proto}://${location.host}/ws`);
+        net.addEventListener('open', () => mpSend({ type: 'game-connect', code: ROOM, playerId: MY_PID }));
+        net.addEventListener('message', (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } mpHandle(m); });
+        net.addEventListener('error', () => { if (state === 'mpwait') mpFallback('Connexion impossible.'); });
+        net.addEventListener('close', () => { if (state === 'mpwait') mpFallback('Déconnecté du serveur.'); });
+        state = 'mpwait';
+        $('mp-overlay').classList.remove('hidden');
+      }
+
+      function mpHandle(m) {
+        switch (m.type) {
+          case 'game-connected':
+            myId = m.playerId || MY_PID;
+            mpTotal = m.total;
+            roster = m.players || [];
+            amHost = !!(roster.find((p) => p.id === myId) || {}).isHost;
+            renderRoster(roster, m.connectedCount);
+            mpMaybeStart(m.connectedCount);
+            break;
+          case 'player-reconnected':
+            renderRoster(roster, m.connectedCount);
+            mpMaybeStart(m.connectedCount);
+            break;
+          case 'relay':
+            onRelay(m.from, m.data);
+            break;
+          case 'score-waiting':
+            if (!$('mp-done-overlay').classList.contains('hidden')) {
+              $('mp-done-msg').textContent = `Scores : ${m.submitted}/${m.total}…`;
+            }
+            break;
+          case 'round-complete':
+            showReveal(m);
+            break;
+          case 'error':
+            if (state === 'mpwait') mpFallback(m.message || 'Erreur.');
+            break;
+        }
+      }
+
+      function renderRoster(list, connectedCount) {
+        const ul = $('mp-players');
+        ul.innerHTML = '';
+        list.forEach((p, i) => {
+          const li = document.createElement('li');
+          li.className = 'player';
+          const col = COLORS[i % COLORS.length];
+          li.innerHTML = `<span class="dot" style="color:${col};background:${col}"></span>` +
+            `<span class="pname">${escapeHtml(p.name)}${p.id === myId ? ' (toi)' : ''}</span>`;
+          ul.appendChild(li);
+        });
+        $('mp-wait').textContent = `${connectedCount || 0} / ${mpTotal} joueurs prêts…`;
+      }
+
+      function mpMaybeStart(connectedCount) {
+        if (mpStarted) return;
+        if (connectedCount >= mpTotal && mpTotal >= 1) {
+          mpStarted = true;
+          buildMpPlayers();
+          startCountdown();
+        }
+      }
+
+      function buildMpPlayers() {
+        players.clear(); bullets.length = 0; ghostBullets.length = 0; particles.length = 0;
+        roster.forEach((e, i) => {
+          const p = makePlayer(e.id, i, e.name, e.id === myId, false);
+          players.set(e.id, p);
+          if (e.id === myId) me = p;
+        });
+        if (!me) { me = makePlayer(myId, 0, MY_NAME, true, false); players.set(myId, me); }
+      }
+
+      function onRelay(from, d) {
+        if (!d) return;
+        if (d.k === 'pos') {
+          const p = players.get(from);
+          if (p && !p.isMe) { p.tx = d.x; p.ty = d.y; p.tangle = d.a; p.alive = !!d.al; }
+        } else if (d.k === 'shot') {
+          ghostBullets.push({ x: d.x, y: d.y, vx: Math.cos(d.a) * BULLET_SPEED, vy: Math.sin(d.a) * BULLET_SPEED, life: BULLET_LIFE, owner: from });
+          spawnMuzzle(d.x, d.y, d.a, d.c || '#ffe27a');
+        } else if (d.k === 'push' && d.id === myId && me) {
+          applyPush(me, d.dx, d.dy);
+        } else if (d.k === 'cs' && !amHost) {
+          onChargeState(d);
+        }
+      }
+
+      function showReveal(m) {
+        $('mp-done-overlay').classList.add('hidden');
+        const scores = m.roundScores || {};
+        const list = (m.players || roster).slice().sort((a, b) => (scores[b.id] ?? 0) - (scores[a.id] ?? 0));
+        const el = $('reveal-list');
+        el.innerHTML = '';
+        list.forEach((p, i) => {
+          const div = document.createElement('div');
+          div.className = 'end-row' + (i === 0 ? ' winner' : '');
+          div.innerHTML = `<span class="rk">${['🥇','🥈','🥉'][i] || (i + 1) + '.'}</span>` +
+            `<span class="nm">${escapeHtml(p.name)}${p.id === myId ? ' (toi)' : ''}</span>` +
+            `<span class="pts">${scores[p.id] ?? 0} pts</span>`;
+          el.appendChild(div);
+        });
+        $('reveal-overlay').classList.remove('hidden');
+        const rows = el.querySelectorAll('.end-row');
+        rows.forEach((r, i) => setTimeout(() => {
+          r.classList.add('visible');
+          if (i === rows.length - 1) setTimeout(() => $('reveal-continue-btn').classList.remove('hidden'), 500);
+        }, 300 + i * 600));
+        $('reveal-continue-btn').textContent = m.hasMore ? 'Manche suivante →' : 'Retour au lobby →';
+      }
+
+      $('reveal-continue-btn').addEventListener('click', () => {
+        location.href = `/?room=${encodeURIComponent(ROOM)}&pid=${encodeURIComponent(myId)}`;
+      });
+
+      function mpFallback(message) {
+        MP = false; net = null;
+        const err = document.createElement('div');
+        err.id = 'err'; err.textContent = message + ' Tu peux jouer contre des bots.';
+        document.body.appendChild(err);
+        setTimeout(() => err.remove(), 5000);
+        $('mp-overlay').classList.add('hidden');
+        $('start-overlay').classList.remove('hidden');
+      }
+
+      // ====================================================================
+      //  DÉMARRAGE
+      // ====================================================================
+      if (MP) mpConnect();
+      else { $('start-overlay').classList.remove('hidden'); state = 'boot'; }
+      requestAnimationFrame(loop);
+    </script>
+  </body>
+</html>

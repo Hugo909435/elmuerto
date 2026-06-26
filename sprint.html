@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Sprint — El Muerto Arcade</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 100%; height: 100%; overflow: hidden;
+        background: #0b1020; color: #fff;
+        font-family: 'Trebuchet MS', system-ui, sans-serif;
+        -webkit-user-select: none; user-select: none;
+        touch-action: manipulation;
+      }
+      #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+      /* tape sur tout l'écran pendant la course */
+      #tap-zone {
+        position: fixed; inset: 0; z-index: 5;
+        display: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #tap-zone.active { display: block; }
+
+      /* ---- HUD ---- */
+      #hud {
+        position: fixed; top: 0; left: 0; right: 0;
+        display: none; flex-direction: column; align-items: center;
+        padding: max(10px, env(safe-area-inset-top)) 12px 0;
+        z-index: 8; pointer-events: none;
+      }
+      #hud.show { display: flex; }
+      .hud-pill {
+        background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.14); border-radius: 999px;
+        padding: 8px 18px; font-size: 16px; font-weight: 800;
+        display: flex; align-items: center; gap: 10px;
+      }
+      .hud-pill .small { font-size: 12px; font-weight: 600; opacity: 0.7; }
+
+      /* indicateur de tape au centre */
+      #tap-hint {
+        position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom,0px) + 40px);
+        transform: translateX(-50%);
+        z-index: 7; pointer-events: none;
+        text-align: center;
+      }
+      #tap-hint.hidden { display: none; }
+      #tap-hint .big {
+        font-size: clamp(26px, 9vw, 46px); font-weight: 900;
+        letter-spacing: 1px; color: #fde047;
+        text-shadow: 0 4px 18px rgba(0,0,0,0.5);
+        animation: pulse 0.7s ease-in-out infinite;
+      }
+      #tap-hint .sub { font-size: 14px; opacity: 0.8; margin-top: 2px; }
+      @keyframes pulse { 0%,100%{ transform: scale(1);} 50%{ transform: scale(1.12);} }
+
+      /* ---- bouton retour ---- */
+      #home-btn {
+        position: fixed;
+        top: max(10px, env(safe-area-inset-top)); left: 10px;
+        z-index: 20;
+        display: flex; align-items: center; justify-content: center;
+        text-decoration: none; background: rgba(0,0,0,0.6);
+        border: 1px solid rgba(255,255,255,0.15); border-radius: 50%;
+        width: 42px; height: 42px; font-size: 19px; color: #fff;
+      }
+
+      /* ---- overlays ---- */
+      .overlay {
+        position: fixed; inset: 0; z-index: 30;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        text-align: center; gap: 18px;
+        padding: max(28px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
+        background: rgba(8,12,28,0.94); backdrop-filter: blur(6px);
+      }
+      .overlay.hidden { display: none; }
+      .overlay h1 { font-size: clamp(30px, 9vw, 56px); letter-spacing: 1px; }
+      .overlay p { font-size: clamp(14px, 4vw, 19px); opacity: 0.85; max-width: 440px; line-height: 1.5; }
+      .btn {
+        cursor: pointer; border: none; border-radius: 999px;
+        padding: 16px 40px; font-size: 18px; font-weight: 800;
+        letter-spacing: 1px; text-transform: uppercase; font-family: inherit;
+        background: linear-gradient(180deg, #fbbf24, #f59e0b);
+        color: #3a2600; box-shadow: 0 8px 24px rgba(245,158,11,0.4);
+        transition: transform 0.1s ease;
+      }
+      .btn:active { transform: scale(0.95); }
+
+      /* compte à rebours */
+      #countdown-overlay {
+        position: fixed; inset: 0; z-index: 40;
+        display: none; align-items: center; justify-content: center;
+        pointer-events: none;
+      }
+      #countdown-overlay.show { display: flex; }
+      #countdown-num {
+        font-size: clamp(90px, 28vw, 200px); font-weight: 900;
+        color: #fff; text-shadow: 0 8px 40px rgba(0,0,0,0.6);
+      }
+      .pop-anim { animation: pop 0.5s ease-out; }
+      @keyframes pop {
+        0% { transform: scale(2); opacity: 0; }
+        40% { opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+
+      /* reveal classement (MP) */
+      #score-reveal-overlay { justify-content: flex-start; padding-top: max(48px, env(safe-area-inset-top)); gap: 12px; }
+      #reveal-title { font-size: clamp(26px, 7vw, 44px); }
+      #reveal-list { width: 100%; max-width: 400px; flex: 1; overflow-y: auto; margin-top: 6px; }
+      .rp-entry {
+        display: flex; align-items: center; gap: 12px;
+        padding: 12px 16px; border-radius: 14px;
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.1);
+        margin-bottom: 10px;
+        transform: translateY(20px); opacity: 0;
+        transition: transform 0.45s ease, opacity 0.45s ease;
+      }
+      .rp-entry.visible { transform: translateY(0); opacity: 1; }
+      .rp-entry.winner { background: rgba(255,226,122,0.12); border-color: rgba(255,226,122,0.35); }
+      .rp-rank { font-size: 26px; width: 34px; text-align: center; }
+      .rp-name { flex: 1; font-weight: 700; font-size: 15px; text-align: left; }
+      .rp-score { font-size: 20px; font-weight: 900; color: #ffe27a; }
+
+      .hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div id="tap-zone"></div>
+
+    <a id="home-btn" href="/" aria-label="Retour">←</a>
+
+    <!-- HUD course -->
+    <div id="hud">
+      <div class="hud-pill">
+        <span id="hud-pos">0 m</span>
+        <span class="small">/ <span id="hud-len">150</span> m</span>
+        <span class="small" id="hud-time">0.0 s</span>
+      </div>
+    </div>
+
+    <!-- Indicateur tape -->
+    <div id="tap-hint" class="hidden">
+      <div class="big">TAPE&nbsp;!</div>
+      <div class="sub">Plus tu tapes vite, plus tu cours vite</div>
+    </div>
+
+    <!-- Compte à rebours -->
+    <div id="countdown-overlay"><div id="countdown-num"></div></div>
+
+    <!-- Solo: départ -->
+    <div id="start-overlay" class="overlay">
+      <h1>🏃 Sprint</h1>
+      <p>Tape l'écran le plus vite possible pour faire courir ton bonhomme jusqu'à la ligne d'arrivée. Le plus rapide gagne&nbsp;!</p>
+      <button id="start-btn" class="btn">Courir&nbsp;!</button>
+    </div>
+
+    <!-- Solo: résultat -->
+    <div id="result-overlay" class="overlay hidden">
+      <h1>🏁 Terminé&nbsp;!</h1>
+      <div style="font-size:clamp(40px,12vw,72px);font-weight:900;color:#ffe27a" id="result-time">0.0 s</div>
+      <p id="result-detail"></p>
+      <button id="replay-btn" class="btn">Rejouer</button>
+    </div>
+
+    <!-- MP: attente connexion -->
+    <div id="mp-wait-overlay" class="overlay hidden">
+      <div style="font-size:52px">🏟️</div>
+      <h1>Sur la ligne…</h1>
+      <p id="mp-wait-msg">Connexion…</p>
+    </div>
+
+    <!-- MP: course finie, attente des autres -->
+    <div id="mp-done-overlay" class="overlay hidden">
+      <div style="font-size:52px">🏁</div>
+      <h1 id="mp-done-time">0.0 s</h1>
+      <p id="mp-done-msg">En attente des autres coureurs…</p>
+    </div>
+
+    <!-- MP: classement -->
+    <div id="score-reveal-overlay" class="overlay hidden">
+      <h1 id="reveal-title">🏆 Classement</h1>
+      <div id="reveal-list"></div>
+      <button id="reveal-continue-btn" class="btn hidden">Retour au lobby →</button>
+    </div>
+
+    <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const show = el => el.classList.remove('hidden');
+      const hide = el => el.classList.add('hidden');
+      const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c =>
+        ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+      // ---------- Réglages du jeu ----------
+      const TRACK_LEN   = 150;    // longueur de la piste en "mètres"
+      const TAP_IMPULSE = 3.0;    // m/s ajoutés par tape
+      const DRAG        = 4.0;    // décélération (par seconde, proportionnelle à la vitesse)
+      const MAX_TIME    = 60;     // s — au-delà, on termine d'office
+      const LANE_COLORS = ['#f87171','#60a5fa','#4ade80','#fbbf24','#c084fc','#fb923c','#34d399','#f472b6'];
+
+      // ---------- Canvas ----------
+      const canvas = $('game');
+      const ctx = canvas.getContext('2d');
+      let W = 0, H = 0, DPR = 1;
+      function resize() {
+        DPR = Math.min(window.devicePixelRatio || 1, 2);
+        W = window.innerWidth; H = window.innerHeight;
+        canvas.width = W * DPR; canvas.height = H * DPR;
+        canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+        ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      // ---------- Paramètres URL ----------
+      const params = new URLSearchParams(location.search);
+      const roomCode = params.get('room');
+      const myId = params.get('pid') || (() => { try { return localStorage.getItem('emarcade-pid'); } catch { return null; } })();
+      const myName = params.get('name') || 'Toi';
+      const isMP = !!(roomCode && myId);
+
+      // ---------- État des coureurs ----------
+      // runner: { id, name, color, pos (m), speed (m/s), step (anim), finished, time }
+      let runners = [];
+      let me = null;
+      let raceState = 'idle';   // idle | countdown | running | done
+      let raceStartAt = 0;
+
+      function makeRunner(id, name, color) {
+        return { id, name, color, pos: 0, speed: 0, step: 0, finished: false, time: 0 };
+      }
+
+      // ---------- Rendu ----------
+      function laneRect(i, n) {
+        const top = Math.min(120, H * 0.16);
+        const bottom = H - Math.max(40, H * 0.06);
+        const usable = bottom - top;
+        const laneH = usable / n;
+        return { top: top + i * laneH, h: laneH };
+      }
+
+      function trackGeom() {
+        const left = 56;
+        const right = W - 70;            // place pour la ligne d'arrivée
+        return { left, right, span: right - left };
+      }
+
+      function drawStickman(x, groundY, scale, color, step, running) {
+        const s = scale;
+        ctx.save();
+        ctx.translate(x, groundY);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = Math.max(2, 3 * s);
+        ctx.lineCap = 'round';
+        // animation de course : balancement des membres
+        const swing = running ? Math.sin(step) : 0;
+        const swing2 = running ? Math.sin(step + Math.PI) : 0;
+        const bob = running ? Math.abs(Math.sin(step)) * 2 * s : 0;
+        const hipY = -22 * s - bob;
+        const headY = -42 * s - bob;
+        // jambes
+        ctx.beginPath();
+        ctx.moveTo(0, hipY);
+        ctx.lineTo(swing * 9 * s, hipY + 22 * s);
+        ctx.moveTo(0, hipY);
+        ctx.lineTo(swing2 * 9 * s, hipY + 22 * s);
+        ctx.stroke();
+        // tronc
+        ctx.beginPath();
+        ctx.moveTo(0, hipY);
+        ctx.lineTo(0, headY + 7 * s);
+        ctx.stroke();
+        // bras
+        ctx.beginPath();
+        ctx.moveTo(0, headY + 12 * s);
+        ctx.lineTo(swing2 * 8 * s, headY + 22 * s);
+        ctx.moveTo(0, headY + 12 * s);
+        ctx.lineTo(swing * 8 * s, headY + 22 * s);
+        ctx.stroke();
+        // tête
+        ctx.beginPath();
+        ctx.fillStyle = color;
+        ctx.arc(0, headY, 7 * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function render() {
+        // fond ciel
+        const sky = ctx.createLinearGradient(0, 0, 0, H);
+        sky.addColorStop(0, '#1e3a8a');
+        sky.addColorStop(1, '#0b1020');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, W, H);
+
+        const n = runners.length || 1;
+        const g = trackGeom();
+        const finishX = g.right + 6;
+
+        // repères de distance verticaux (tous les 25 m)
+        const areaTop = Math.min(120, H * 0.16);
+        const areaBot = H - Math.max(40, H * 0.06);
+        ctx.textAlign = 'center';
+        ctx.font = "11px 'Trebuchet MS', sans-serif";
+        for (let d = 25; d < TRACK_LEN; d += 25) {
+          const mx = g.left + (d / TRACK_LEN) * g.span;
+          ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(mx, areaTop);
+          ctx.lineTo(mx, areaBot);
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(255,255,255,0.35)';
+          ctx.fillText(d + 'm', mx, areaTop - 4);
+        }
+
+        runners.forEach((r, i) => {
+          const ln = laneRect(i, n);
+          const groundY = ln.top + ln.h * 0.78;
+          const scale = Math.max(0.6, Math.min(1.1, ln.h / 130));
+
+          // piste
+          ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.07)';
+          ctx.fillRect(0, ln.top, W, ln.h);
+          // sol
+          ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, groundY + 2);
+          ctx.lineTo(W, groundY + 2);
+          ctx.stroke();
+
+          // ligne d'arrivée (damier)
+          const sq = Math.max(5, ln.h / 10);
+          for (let y = ln.top; y < ln.top + ln.h; y += sq) {
+            for (let k = 0; k < 2; k++) {
+              const on = (Math.floor((y - ln.top) / sq) + k) % 2 === 0;
+              ctx.fillStyle = on ? '#fff' : '#111';
+              ctx.fillRect(finishX + k * sq, y, sq, Math.min(sq, ln.top + ln.h - y));
+            }
+          }
+
+          // étiquette nom
+          const frac = Math.min(1, r.pos / TRACK_LEN);
+          const x = g.left + frac * g.span;
+          ctx.font = `${Math.round(11 * scale + 3)}px 'Trebuchet MS', sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = r.id === (me && me.id) ? '#fde047' : 'rgba(255,255,255,0.85)';
+          const label = r.name + (r.finished ? '  🏁' : '');
+          ctx.fillText(label, x, ln.top + 16);
+
+          // bonhomme
+          const running = raceState === 'running' && !r.finished && r.speed > 0.15;
+          drawStickman(x, groundY, scale, r.color, r.step, running);
+        });
+      }
+
+      // ---------- Boucle ----------
+      let lastT = performance.now();
+      function loop(now) {
+        const dt = Math.min(0.05, (now - lastT) / 1000);
+        lastT = now;
+
+        if (raceState === 'running') {
+          // physique de mon coureur
+          me.speed -= DRAG * me.speed * dt;
+          if (me.speed < 0) me.speed = 0;
+          me.pos += me.speed * dt;
+          me.step += (0.6 + me.speed * 0.9) * dt * 12;
+          if (!me.finished && me.pos >= TRACK_LEN) finishRace();
+
+          // anim des pairs (selon leur dernière vitesse connue)
+          runners.forEach(r => {
+            if (r === me) return;
+            if (!r.finished) r.step += (0.6 + (r.speed || 0) * 0.9) * dt * 12;
+          });
+
+          // HUD
+          $('hud-pos').textContent = Math.floor(Math.min(TRACK_LEN, me.pos)) + ' m';
+          const el = (now - raceStartAt) / 1000;
+          $('hud-time').textContent = el.toFixed(1) + ' s';
+          if (el > MAX_TIME && !me.finished) finishRace();
+
+          // diffusion position aux pairs
+          maybeSendPos(now);
+        }
+
+        render();
+        requestAnimationFrame(loop);
+      }
+      requestAnimationFrame(loop);
+
+      // ---------- Entrée (tape) ----------
+      function onTap() {
+        if (raceState !== 'running' || me.finished) return;
+        me.speed += TAP_IMPULSE;
+      }
+      const tapZone = $('tap-zone');
+      tapZone.addEventListener('pointerdown', (e) => { e.preventDefault(); onTap(); });
+      window.addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); onTap(); } });
+
+      // ---------- Compte à rebours + départ ----------
+      function startCountdown() {
+        if (raceState !== 'idle') return;
+        raceState = 'countdown';
+        $('hud').classList.add('show');
+        const ov = $('countdown-overlay');
+        ov.classList.add('show');
+        const steps = ['3', '2', '1', 'GO !'];
+        let i = 0;
+        const tick = () => {
+          if (i >= steps.length) {
+            ov.classList.remove('show');
+            beginRace();
+            return;
+          }
+          const num = $('countdown-num');
+          num.textContent = steps[i];
+          num.classList.remove('pop-anim'); void num.offsetWidth; num.classList.add('pop-anim');
+          i++;
+          setTimeout(tick, 800);
+        };
+        tick();
+      }
+
+      function beginRace() {
+        raceState = 'running';
+        raceStartAt = performance.now();
+        runners.forEach(r => { r.pos = 0; r.speed = 0; r.finished = false; });
+        tapZone.classList.add('active');
+        $('tap-hint').classList.remove('hidden');
+      }
+
+      function finishRace() {
+        if (me.finished) return;
+        me.finished = true;
+        me.pos = TRACK_LEN;
+        me.time = (performance.now() - raceStartAt) / 1000;
+        tapZone.classList.remove('active');
+        $('tap-hint').classList.add('hidden');
+
+        if (isMP) {
+          mpSend({ type: 'relay', data: { type: 'sprint-fin', t: me.time } });
+          const pts = scoreFromTime(me.time);
+          mpSend({ type: 'game-score', score: pts });
+          $('mp-done-time').textContent = me.time.toFixed(2) + ' s';
+          $('mp-done-msg').textContent = 'En attente des autres coureurs…';
+          show($('mp-done-overlay'));
+        } else {
+          raceState = 'done';
+          $('result-time').textContent = me.time.toFixed(2) + ' s';
+          $('result-detail').textContent = me.time < 28 ? 'Quel sprinteur ! 🔥'
+            : me.time < 42 ? 'Bien couru !' : 'Continue à t\'entraîner !';
+          show($('result-overlay'));
+        }
+      }
+
+      function scoreFromTime(t) {
+        // plus c'est rapide, plus c'est de points (≈ 100 → 1000)
+        return Math.max(100, Math.min(1000, Math.round(1000 - (t - 25) * 30)));
+      }
+
+      // =====================================================
+      // SOLO
+      // =====================================================
+      if (!isMP) {
+        me = makeRunner(myId || 'me', myName, LANE_COLORS[0]);
+        runners = [me];
+        $('start-btn').addEventListener('click', () => { hide($('start-overlay')); startCountdown(); });
+        $('replay-btn').addEventListener('click', () => {
+          hide($('result-overlay'));
+          raceState = 'idle';
+          me.finished = false; me.pos = 0; me.speed = 0; me.time = 0;
+          startCountdown();
+        });
+      }
+
+      // =====================================================
+      // MULTIJOUEUR
+      // =====================================================
+      let ws = null;
+      let mpTotal = 0;
+      let posSentAt = 0;
+
+      function mpSend(payload) {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+      }
+
+      function maybeSendPos(now) {
+        if (!isMP || me.finished) return;
+        if (now - posSentAt < 80) return;   // ~12 Hz
+        posSentAt = now;
+        mpSend({ type: 'relay', data: { type: 'sprint-pos', f: me.pos / TRACK_LEN, sp: me.speed } });
+      }
+
+      function mpBuildRunners(players) {
+        runners = players.map((p, i) => {
+          const r = makeRunner(p.id, p.name, LANE_COLORS[i % LANE_COLORS.length]);
+          return r;
+        });
+        me = runners.find(r => r.id === myId) || runners[0];
+        mpTotal = players.length;
+      }
+
+      let mpStarted = false;
+      function mpMaybeStart(connectedCount) {
+        if (mpStarted) return;
+        if (connectedCount >= mpTotal && mpTotal > 0) {
+          mpStarted = true;
+          hide($('mp-wait-overlay'));
+          startCountdown();
+        }
+      }
+
+      function mpHandle(msg) {
+        switch (msg.type) {
+          case 'game-connected':
+            if (msg.players) mpBuildRunners(msg.players);
+            $('mp-wait-msg').textContent = `${msg.connectedCount} / ${msg.total} coureurs prêts…`;
+            mpMaybeStart(msg.connectedCount);
+            break;
+
+          case 'player-reconnected':
+            $('mp-wait-msg').textContent = `${msg.connectedCount} / ${mpTotal} coureurs prêts…`;
+            mpMaybeStart(msg.connectedCount);
+            break;
+
+          case 'relay': {
+            const d = msg.data || {};
+            const r = runners.find(x => x.id === msg.from);
+            if (!r) break;
+            if (d.type === 'sprint-pos') {
+              r.pos = Math.min(TRACK_LEN, d.f * TRACK_LEN);
+              r.speed = d.sp || 0;
+            } else if (d.type === 'sprint-fin') {
+              r.finished = true; r.pos = TRACK_LEN; r.time = d.t; r.speed = 0;
+            }
+            break;
+          }
+
+          case 'score-waiting':
+            if (!$('mp-done-overlay').classList.contains('hidden')) {
+              $('mp-done-msg').textContent = `Arrivée : ${msg.submitted}/${msg.total} coureurs…`;
+            }
+            break;
+
+          case 'round-complete':
+            mpShowRanking(msg);
+            break;
+        }
+      }
+
+      const MEDALS = ['🥇', '🥈', '🥉'];
+      function mpShowRanking(msg) {
+        raceState = 'done';
+        tapZone.classList.remove('active');
+        hide($('mp-done-overlay'));
+        $('hud').classList.remove('show');
+
+        const scores = msg.roundScores || {};
+        const players = (runners.length ? runners : (msg.players || []));
+        // tri croissant : pire d'abord, meilleur (winner) en dernier
+        const sorted = [...players].sort((a, b) => (scores[a.id] ?? 0) - (scores[b.id] ?? 0));
+        const total = sorted.length;
+
+        const list = $('reveal-list');
+        list.innerHTML = '';
+        sorted.forEach((p, fromWorst) => {
+          const rankFromBest = total - 1 - fromWorst;
+          const entry = document.createElement('div');
+          entry.className = 'rp-entry' + (rankFromBest === 0 ? ' winner' : '');
+          entry.innerHTML = `
+            <span class="rp-rank">${MEDALS[rankFromBest] ?? (rankFromBest + 1) + '.'}</span>
+            <span class="rp-name">${escapeHtml(p.name)}${p.id === myId ? ' (toi)' : ''}</span>
+            <span class="rp-score">${scores[p.id] ?? 0} pts</span>
+          `;
+          list.appendChild(entry);
+        });
+
+        hide($('reveal-continue-btn'));
+        show($('score-reveal-overlay'));
+
+        const entries = list.querySelectorAll('.rp-entry');
+        entries.forEach((entry, i) => {
+          setTimeout(() => {
+            entry.classList.add('visible');
+            if (i === entries.length - 1) setTimeout(() => show($('reveal-continue-btn')), 800);
+          }, 700 + i * 1000);
+        });
+        $('reveal-continue-btn').textContent = msg.hasMore ? 'Manche suivante →' : 'Retour au lobby →';
+      }
+
+      $('reveal-continue-btn').addEventListener('click', () => {
+        location.href = `/?room=${encodeURIComponent(roomCode)}&pid=${encodeURIComponent(myId)}`;
+      });
+
+      function mpConnect() {
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        ws = new WebSocket(`${proto}://${location.host}/ws`);
+        ws.addEventListener('open', () => {
+          ws.send(JSON.stringify({ type: 'game-connect', code: roomCode, playerId: myId }));
+        });
+        ws.addEventListener('message', (e) => {
+          let msg; try { msg = JSON.parse(e.data); } catch { return; }
+          mpHandle(msg);
+        });
+        ws.addEventListener('error', () => { $('mp-wait-msg').textContent = 'Erreur de connexion au serveur.'; });
+      }
+
+      // ---------- Init ----------
+      if (isMP) {
+        hide($('start-overlay'));
+        show($('mp-wait-overlay'));
+        $('mp-wait-msg').textContent = 'Connexion en cours…';
+        mpConnect();
+      }
+    })();
+    </script>
+  </body>
+</html>

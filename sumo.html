@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>El Muerto Sumo — Push Battle</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 100%; height: 100%; overflow: hidden;
+        background: #0e0a14;
+        font-family: 'Trebuchet MS', system-ui, sans-serif;
+        color: #fff;
+        -webkit-user-select: none; user-select: none; touch-action: none;
+      }
+      #game { position: fixed; inset: 0; display: block; }
+
+      #home-btn {
+        position: fixed; top: max(14px, env(safe-area-inset-top)); left: 14px; z-index: 11;
+        display: flex; align-items: center; justify-content: center; text-decoration: none;
+        background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 50%; width: 44px; height: 44px; font-size: 20px; color: #fff;
+      }
+
+      #hud {
+        position: fixed; top: max(14px, env(safe-area-inset-top));
+        left: 0; right: 0; display: flex; justify-content: center; gap: 8px;
+        flex-wrap: wrap; pointer-events: none; z-index: 10; padding: 0 64px;
+      }
+      .pill {
+        background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(6px);
+        border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 999px;
+        padding: 6px 13px; font-size: 15px; font-weight: 700; white-space: nowrap;
+        display: flex; align-items: center; gap: 6px;
+      }
+      .pill .nm { max-width: 70px; overflow: hidden; text-overflow: ellipsis; }
+      .pill .hearts { letter-spacing: 1px; }
+      .pill.dead { opacity: 0.4; }
+
+      #hint {
+        position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom));
+        transform: translateX(-50%); z-index: 10; pointer-events: none;
+        background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 999px; padding: 8px 18px; font-size: 14px; opacity: 0.85;
+        text-align: center; white-space: nowrap;
+      }
+      #hint.hidden { display: none; }
+
+      .overlay {
+        position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; text-align: center; padding: 28px;
+        background: radial-gradient(900px 700px at 50% 0%, rgba(120,40,90,0.45), transparent 60%),
+                    rgba(8, 6, 12, 0.92); backdrop-filter: blur(4px);
+      }
+      .overlay.hidden { display: none; }
+      .overlay h1 { font-size: clamp(26px, 7vw, 44px); margin-bottom: 12px; letter-spacing: 1px; }
+      .overlay p { opacity: 0.8; font-size: clamp(14px, 3.6vw, 17px); max-width: 460px; line-height: 1.5; margin-bottom: 18px; }
+      .overlay .big { font-size: clamp(20px, 6vw, 30px); font-weight: 800; color: #ffd166; margin-bottom: 8px; }
+
+      .btn {
+        cursor: pointer; border: none; border-radius: 999px; padding: 15px 30px;
+        font-size: 16px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+        font-family: inherit; background: linear-gradient(180deg, #f472b6, #db2777); color: #2a0016;
+      }
+      .btn:active { transform: scale(0.96); }
+      .btn.ghost { background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
+      .btn.hidden { display: none; }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+      ul#mp-players { list-style: none; width: 100%; max-width: 340px; margin-bottom: 16px; }
+      .player { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+        background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px; margin-bottom: 8px; }
+      .player .dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+      .player .pname { flex: 1; font-weight: 600; text-align: left; }
+      .player .badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+        padding: 3px 9px; border-radius: 999px; background: rgba(244,114,182,0.2); color: #f472b6; }
+      .player .off { font-size: 11px; opacity: 0.5; }
+
+      #end-list { width: 100%; max-width: 340px; margin-bottom: 18px; }
+      .end-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+        background: rgba(0,0,0,0.25); border-radius: 10px; margin-bottom: 6px; }
+      .end-row .rk { width: 28px; font-size: 18px; text-align: center; }
+      .end-row .nm { flex: 1; text-align: left; font-weight: 600; }
+      .end-row .kd { opacity: 0.75; font-size: 13px; }
+
+      #toast {
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        z-index: 15; font-size: clamp(28px, 9vw, 56px); font-weight: 900; pointer-events: none;
+        text-shadow: 0 4px 20px rgba(0,0,0,0.6); opacity: 0; transition: opacity 0.2s;
+      }
+      #toast.show { opacity: 1; }
+
+      #err { position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+        background: #b91c1c; padding: 12px 22px; border-radius: 12px; font-size: 14px;
+        font-weight: 600; z-index: 100; max-width: 90vw; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <a id="home-btn" href="/" aria-label="Retour">←</a>
+
+    <div id="hud" class="hidden"></div>
+    <div id="hint" class="hidden">Lâche pour <b>tourner</b> (viser) · <b>Maintiens</b> pour <b>foncer</b> et pousser</div>
+
+    <div id="toast"></div>
+
+    <!-- Salle d'attente multijoueur -->
+    <div id="mp-overlay" class="overlay hidden">
+      <h1>🤼 Sumo du salon</h1>
+      <p id="mp-sub">Connexion à la salle d'attente…</p>
+      <ul id="mp-players"></ul>
+      <button id="mp-start" class="btn hidden">Lancer le combat 🤼</button>
+      <p id="mp-wait" class="hidden" style="opacity:.7">En attente que l'hôte lance la partie…</p>
+    </div>
+
+    <!-- Écran de départ solo (sans salon) -->
+    <div id="start-overlay" class="overlay hidden">
+      <h1>🤼 EL MUERTO SUMO</h1>
+      <p>Ton sumo <b>tourne tout seul</b> sur lui-même quand tu ne touches rien.<br /><b>Maintiens</b> l'écran pour <b>foncer tout droit</b> et <b>pousser</b> les autres hors du cercle.<br />Dernier sumo dans l'arène gagne&nbsp;!</p>
+      <button id="start-btn" class="btn">Jouer contre des bots</button>
+    </div>
+
+    <!-- Fin de manche -->
+    <div id="end-overlay" class="overlay hidden">
+      <h1 id="end-title">Fin du combat</h1>
+      <p class="big" id="end-sub"></p>
+      <div id="end-list"></div>
+      <div class="row">
+        <button id="rematch-btn" class="btn hidden">Rejouer 🤼</button>
+        <p id="rematch-wait" class="hidden" style="opacity:.7;margin:0">En attente de l'hôte…</p>
+      </div>
+    </div>
+
+    <script>
+      'use strict';
+
+      // ====================================================================
+      //  EL MUERTO SUMO — « Push Battle » : arène circulaire, contrôle à un
+      //  bouton. Le sumo tourne sur lui-même quand on ne touche rien ; en
+      //  maintenant l'appui il fonce tout droit et pousse les autres. Tomber
+      //  hors du cercle coûte une vie. Dernier sumo debout gagne.
+      //  Multijoueur : on réutilise le relais temps réel de la course / des
+      //  tanks (race-hello / race-go / race-state / race-tomenu).
+      // ====================================================================
+
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const $ = (id) => document.getElementById(id);
+
+      // ---- Identité / salon (passés par le lobby) ----
+      const params = new URLSearchParams(location.search);
+      const ROOM = params.get('room');
+      const MY_PID = params.get('pid');
+      const MY_NAME = (params.get('name') || 'Joueur').slice(0, 16);
+      let MP = !!(ROOM && MY_PID);
+
+      const COLORS = ['#4ade80', '#ef4444', '#3b82f6', '#f59e0b', '#a855f7', '#ec4899', '#14b8a6', '#f97316'];
+
+      // ---- Constantes de jeu ----
+      const ARENA = 1200;               // espace logique carré
+      const CX = ARENA / 2, CY = ARENA / 2;
+      const RING_R = 500;               // rayon du cercle de combat (bord = chute)
+      const SUMO_R = 42;                // rayon d'un sumo
+      const TURN_SPEED = 2.7;           // rad/s de rotation sur soi (au repos)
+      const ACCEL = 1500;               // px/s² en marche avant (maintien)
+      const MAX_SPEED = 540;            // px/s vitesse max sous propulsion
+      const DAMP = 2.4;                 // amortissement (frottement) par seconde
+      const RESTITUTION = 0.55;         // rebond des collisions sumo-sumo
+      const PUSH_BONUS = 1.18;          // gain de poussée quand on charge (maintien)
+      const LIVES = 3;
+      const RESPAWN_DELAY = 1.3;        // s avant réapparition
+      const INVULN_TIME = 1.6;          // s d'invincibilité après respawn
+
+      // Points d'apparition répartis sur un anneau intérieur.
+      const SPAWNS = Array.from({ length: 8 }, (_, i) => {
+        const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
+        return { x: CX + Math.cos(a) * RING_R * 0.55, y: CY + Math.sin(a) * RING_R * 0.55 };
+      });
+
+      // ---- État ----
+      let net = null, myId = MP ? MY_PID : 'me', isHost = false;
+      let state = 'boot';            // boot | mpwait | countdown | playing | ended
+      const sumos = new Map();       // id -> sumo (inclut le mien)
+      let me = null;
+      const particles = [];
+      let countdown = 0, netAccum = 0;
+
+      function makeSumo(id, slot, name, isMe, isBot) {
+        const sp = SPAWNS[slot % SPAWNS.length];
+        // angle dirigé vers le centre au départ
+        const toC = Math.atan2(CY - sp.y, CX - sp.x);
+        return {
+          id, name, slot, isMe: !!isMe, isBot: !!isBot,
+          color: COLORS[slot % COLORS.length],
+          x: sp.x, y: sp.y, vx: 0, vy: 0, angle: toC,
+          spin: Math.random() < 0.5 ? 1 : -1,
+          lives: LIVES, alive: true,
+          invuln: INVULN_TIME, respawn: 0,
+          kills: 0,
+          // interpolation réseau
+          tx: sp.x, ty: sp.y, tangle: toC, tvx: 0, tvy: 0,
+          // IA
+          aiTimer: 0, aiDrive: false,
+        };
+      }
+
+      function resizeCanvas() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(innerWidth * dpr);
+        canvas.height = Math.floor(innerHeight * dpr);
+        canvas.style.width = innerWidth + 'px';
+        canvas.style.height = innerHeight + 'px';
+      }
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
+
+      // Échelle pour faire tenir toute l'arène à l'écran (letterbox).
+      function viewTransform() {
+        const vw = canvas.width, vh = canvas.height;
+        const scale = Math.min(vw / ARENA, vh / ARENA) * 0.98;
+        const ox = (vw - ARENA * scale) / 2;
+        const oy = (vh - ARENA * scale) / 2;
+        return { scale, ox, oy };
+      }
+
+      // ====================================================================
+      //  CONTRÔLE À UN BOUTON  (relâché = rotation ; maintenu = avance)
+      // ====================================================================
+      let pressing = false;
+
+      function onDown(e) {
+        if (e) e.preventDefault();
+        if (state !== 'playing' || !me || !me.alive) return;
+        pressing = true;
+      }
+      function onUp(e) {
+        if (e) e.preventDefault();
+        pressing = false;
+      }
+      canvas.addEventListener('pointerdown', onDown);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
+      // Sécurité clavier (espace) pour tester sur PC.
+      window.addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat) onDown(e); });
+      window.addEventListener('keyup', (e) => { if (e.code === 'Space') onUp(e); });
+
+      // ====================================================================
+      //  BOUCLE DE JEU
+      // ====================================================================
+      let last = performance.now();
+      function loop(now) {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        if (state === 'playing' || state === 'countdown') update(dt);
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      function update(dt) {
+        if (state === 'countdown') {
+          countdown -= dt;
+          if (countdown <= 0) { state = 'playing'; $('hint').classList.remove('hidden'); }
+        }
+
+        for (const s of sumos.values()) {
+          // Mort / réapparition
+          if (!s.alive) {
+            if (s.lives > 0 && (s.isMe || s.isBot)) {
+              s.respawn -= dt;
+              if (s.respawn <= 0) respawnSumo(s);
+            }
+            continue;
+          }
+          if (s.invuln > 0) s.invuln -= dt;
+
+          if (s.isMe) {
+            driveSumo(s, pressing, dt);
+          } else if (s.isBot) {
+            updateBot(s, dt);
+          } else {
+            // Pair distant : interpolation douce vers le dernier état reçu,
+            // tout en gardant une vitesse estimée pour les collisions locales.
+            const k = Math.min(1, 16 * dt);
+            s.x += (s.tx - s.x) * k;
+            s.y += (s.ty - s.y) * k;
+            s.angle = lerpAng(s.angle, s.tangle, k);
+            s.vx = s.tvx; s.vy = s.tvy;
+          }
+        }
+
+        // Collisions sumo-sumo : je n'applique la résolution qu'à MON sumo
+        // (et à tous les sumos en solo). Chaque client pousse le sien hors de
+        // l'autre, de façon symétrique → séparation cohérente sur le réseau.
+        resolveCollisions(dt);
+
+        // Chute hors du ring : chacun arbitre sa propre sortie.
+        for (const s of sumos.values()) {
+          if (!s.alive || s.invuln > 0) continue;
+          if (!s.isMe && !s.isBot) continue;        // les pairs gèrent eux-mêmes leur chute
+          const d = Math.hypot(s.x - CX, s.y - CY);
+          if (d > RING_R) fallOut(s);
+        }
+
+        // Particules
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.92; p.vy *= 0.92; p.life -= dt;
+          if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        // Réseau : envoyer mon état régulièrement
+        if (MP && me) {
+          netAccum += dt;
+          if (netAccum >= 0.05) {
+            netAccum = 0;
+            net && net.send({ type: 'race-state', s: [
+              Math.round(me.x), Math.round(me.y), +me.angle.toFixed(2),
+              me.lives, me.alive ? 1 : 0, me.invuln > 0 ? 1 : 0,
+              Math.round(me.vx), Math.round(me.vy),
+            ] });
+          }
+        }
+
+        checkWin();
+      }
+
+      // Physique d'un sumo « local » (le mien ou un bot).
+      function driveSumo(s, accelerating, dt) {
+        if (accelerating) {
+          s.vx += Math.cos(s.angle) * ACCEL * dt;
+          s.vy += Math.sin(s.angle) * ACCEL * dt;
+          const sp = Math.hypot(s.vx, s.vy);
+          if (sp > MAX_SPEED) { s.vx = s.vx / sp * MAX_SPEED; s.vy = s.vy / sp * MAX_SPEED; }
+          s._charging = true;
+        } else {
+          // Au repos : on tourne sur soi pour viser.
+          s.angle += s.spin * TURN_SPEED * dt;
+          s._charging = false;
+        }
+        // Frottement (toujours actif → on glisse puis on s'arrête).
+        const f = Math.exp(-DAMP * dt);
+        s.vx *= f; s.vy *= f;
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+      }
+
+      // Résolution des collisions. On corrige/poussée uniquement les sumos
+      // « locaux » (moi + bots) ; les pairs servent d'obstacles mobiles.
+      function resolveCollisions(dt) {
+        const list = [...sumos.values()].filter((s) => s.alive);
+        for (let i = 0; i < list.length; i++) {
+          for (let j = i + 1; j < list.length; j++) {
+            const a = list[i], b = list[j];
+            const localA = a.isMe || a.isBot;
+            const localB = b.isMe || b.isBot;
+            if (!localA && !localB) continue;
+            let dx = a.x - b.x, dy = a.y - b.y;
+            let d = Math.hypot(dx, dy);
+            const min = SUMO_R * 2;
+            if (d >= min || d === 0) { if (d === 0) { dx = 1; dy = 0; d = 0.001; } else continue; }
+            const nx = dx / d, ny = dy / d;
+            const pen = min - d;
+
+            // Vitesse relative le long de la normale.
+            const rvn = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
+            // Bonus de poussée : un sumo qui charge (maintien) frappe plus fort.
+            const boostA = a._charging ? PUSH_BONUS : 1;
+            const boostB = b._charging ? PUSH_BONUS : 1;
+            let jimp = 0;
+            if (rvn < 0) jimp = -(1 + RESTITUTION) * rvn / 2;
+
+            if (localA) {
+              a.x += nx * (localB ? pen / 2 : pen);
+              a.y += ny * (localB ? pen / 2 : pen);
+              a.vx += nx * jimp * boostB;
+              a.vy += ny * jimp * boostB;
+            }
+            if (localB) {
+              b.x -= nx * (localA ? pen / 2 : pen);
+              b.y -= ny * (localA ? pen / 2 : pen);
+              b.vx -= nx * jimp * boostA;
+              b.vy -= ny * jimp * boostA;
+            }
+            if (rvn < -120 && (localA || localB)) {
+              const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+              spawnImpact(cx, cy);
+            }
+          }
+        }
+      }
+
+      function fallOut(s) {
+        spawnFall(s.x, s.y, s.color);
+        s.lives -= 1;
+        s.alive = false;
+        s.respawn = RESPAWN_DELAY;
+        s.vx = 0; s.vy = 0;
+        renderHud();
+        if (s.isMe) {
+          showToast(s.lives > 0 ? '😵 Éjecté !' : '☠️ KO', s.lives > 0 ? '#f59e0b' : '#ef4444');
+        }
+      }
+
+      function respawnSumo(s) {
+        const sp = SPAWNS[(s.slot + (s.lives % 4)) % SPAWNS.length];
+        s.x = sp.x; s.y = sp.y; s.tx = sp.x; s.ty = sp.y;
+        s.vx = 0; s.vy = 0;
+        s.angle = Math.atan2(CY - sp.y, CX - sp.x);
+        s.alive = true; s.invuln = INVULN_TIME;
+      }
+
+      function checkWin() {
+        if (state !== 'playing') return;
+        const inGame = [...sumos.values()].filter((s) => s.lives > 0 || s.alive);
+        if (sumos.size >= 2 && inGame.length <= 1) endMatch(inGame[0] || null);
+      }
+
+      function lerpAng(a, b, k) {
+        let d = b - a;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        return a + d * k;
+      }
+
+      // ====================================================================
+      //  IA (bots du mode solo)
+      // ====================================================================
+      function updateBot(s, dt) {
+        s.aiTimer -= dt;
+        const dCenter = Math.hypot(s.x - CX, s.y - CY);
+        const nearEdge = dCenter > RING_R * 0.74;
+        const target = nearestEnemy(s);
+
+        if (s.aiTimer <= 0) {
+          s.aiTimer = 0.35 + Math.random() * 0.8;
+          // Vise : soit l'adversaire le plus proche, soit le centre si au bord.
+          let aimAng;
+          if (nearEdge) {
+            aimAng = Math.atan2(CY - s.y, CX - s.x);       // revenir vers le centre
+          } else if (target) {
+            aimAng = Math.atan2(target.y - s.y, target.x - s.x);
+          } else {
+            aimAng = Math.random() * Math.PI * 2;
+          }
+          // Choisit le sens de rotation qui rapproche de l'angle visé.
+          let diff = ((aimAng - s.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+          s.spin = diff >= 0 ? 1 : -1;
+          s._aim = aimAng;
+        }
+
+        // Décide de charger quand il est plutôt bien orienté vers sa cible et
+        // pas en train de foncer bêtement vers le vide quand il est au bord.
+        let aligned = false;
+        if (s._aim != null) {
+          let d = Math.abs(((s._aim - s.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+          aligned = d < 0.35;
+        }
+        const safeToCharge = !nearEdge || facingCenter(s);
+        const wantCharge = aligned && safeToCharge && (nearEdge || (target && Math.random() < 0.85));
+        driveSumo(s, wantCharge, dt);
+      }
+      function facingCenter(s) {
+        const toC = Math.atan2(CY - s.y, CX - s.x);
+        let d = Math.abs(((toC - s.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+        return d < 1.1;
+      }
+      function nearestEnemy(s) {
+        let best = null, bd = Infinity;
+        for (const o of sumos.values()) {
+          if (o.id === s.id || !o.alive) continue;
+          const d = Math.hypot(o.x - s.x, o.y - s.y);
+          if (d < bd) { bd = d; best = o; }
+        }
+        return best;
+      }
+
+      // ====================================================================
+      //  PARTICULES / EFFETS
+      // ====================================================================
+      function spawnImpact(x, y) {
+        for (let i = 0; i < 10; i++) {
+          const a = Math.random() * Math.PI * 2, sp = 120 + Math.random() * 220;
+          particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.25 + Math.random() * 0.2, color: '#ffe27a', r: 2 + Math.random() * 3 });
+        }
+      }
+      function spawnFall(x, y, color) {
+        for (let i = 0; i < 22; i++) {
+          const a = Math.random() * Math.PI * 2, sp = 90 + Math.random() * 280;
+          particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.4 + Math.random() * 0.4, color: Math.random() < 0.5 ? color : '#cbd5e1', r: 2 + Math.random() * 4 });
+        }
+      }
+      function spawnDust(x, y, color) {
+        const a = Math.random() * Math.PI * 2, sp = 30 + Math.random() * 60;
+        particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.3, color, r: 2 + Math.random() * 2 });
+      }
+
+      // ====================================================================
+      //  RENDU
+      // ====================================================================
+      function render() {
+        const { scale, ox, oy } = viewTransform();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = '#0e0a14';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.setTransform(scale, 0, 0, scale, ox, oy);
+
+        // Sol extérieur (le vide où l'on tombe)
+        ctx.fillStyle = '#151020';
+        ctx.fillRect(0, 0, ARENA, ARENA);
+
+        // Halo sous le ring
+        const grd = ctx.createRadialGradient(CX, CY, RING_R * 0.2, CX, CY, RING_R + 40);
+        grd.addColorStop(0, 'rgba(244,114,182,0.10)');
+        grd.addColorStop(1, 'rgba(244,114,182,0)');
+        ctx.fillStyle = grd;
+        ctx.beginPath(); ctx.arc(CX, CY, RING_R + 40, 0, Math.PI * 2); ctx.fill();
+
+        // Le dohyo (cercle de combat)
+        ctx.beginPath(); ctx.arc(CX, CY, RING_R, 0, Math.PI * 2);
+        ctx.fillStyle = '#3a2a1c';
+        ctx.fill();
+        // anneaux concentriques décoratifs
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 3;
+        for (let r = RING_R - 70; r > 60; r -= 90) {
+          ctx.beginPath(); ctx.arc(CX, CY, r, 0, Math.PI * 2); ctx.stroke();
+        }
+        // bord du ring (la limite)
+        ctx.lineWidth = 12;
+        ctx.strokeStyle = '#f4f0e6';
+        ctx.beginPath(); ctx.arc(CX, CY, RING_R, 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath(); ctx.arc(CX, CY, RING_R - 8, 0, Math.PI * 2); ctx.stroke();
+        // marque centrale
+        ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        ctx.beginPath(); ctx.arc(CX, CY, 22, 0, Math.PI * 2); ctx.fill();
+
+        // Sumos vivants
+        for (const s of sumos.values()) if (s.alive) drawSumo(s);
+
+        // Particules
+        for (const p of particles) {
+          ctx.globalAlpha = Math.max(0, p.life * 2.4);
+          ctx.fillStyle = p.color;
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function drawSumo(s) {
+        const speed = Math.hypot(s.vx, s.vy);
+        // poussière sous les pieds quand on charge vite
+        if (s._charging && speed > 180 && Math.random() < 0.6) spawnDust(s.x - Math.cos(s.angle) * SUMO_R, s.y - Math.sin(s.angle) * SUMO_R, '#d6c4a0');
+
+        ctx.save();
+        ctx.translate(s.x, s.y);
+        if (s.invuln > 0) ctx.globalAlpha = 0.45 + 0.4 * Math.sin(performance.now() / 70);
+
+        // ombre
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath(); ctx.ellipse(0, SUMO_R * 0.5, SUMO_R, SUMO_R * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+
+        ctx.rotate(s.angle);
+        // aura de charge
+        if (s._charging) {
+          ctx.strokeStyle = 'rgba(255,226,122,0.7)'; ctx.lineWidth = 5;
+          ctx.beginPath(); ctx.arc(0, 0, SUMO_R + 6, -0.9, 0.9); ctx.stroke();
+        }
+        // corps rond
+        const g = ctx.createRadialGradient(-SUMO_R * 0.3, -SUMO_R * 0.3, SUMO_R * 0.2, 0, 0, SUMO_R);
+        g.addColorStop(0, shade(s.color, 40));
+        g.addColorStop(1, s.color);
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(0, 0, SUMO_R, 0, Math.PI * 2); ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.stroke();
+        // ceinture (mawashi) + bras en avant qui indiquent le sens
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(-SUMO_R, -8, SUMO_R * 2, 16);
+        // « museau » directionnel
+        ctx.fillStyle = shade(s.color, -30);
+        ctx.beginPath(); ctx.arc(SUMO_R * 0.7, 0, SUMO_R * 0.34, 0, Math.PI * 2); ctx.fill();
+        // yeux
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(SUMO_R * 0.4, -SUMO_R * 0.28, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(SUMO_R * 0.4, SUMO_R * 0.28, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#111';
+        ctx.beginPath(); ctx.arc(SUMO_R * 0.46, -SUMO_R * 0.28, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(SUMO_R * 0.46, SUMO_R * 0.28, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+
+        ctx.globalAlpha = 1;
+        // pseudo + coeurs
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 20px Trebuchet MS, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText((s.isMe ? '▸ ' : '') + s.name, s.x, s.y - SUMO_R - 20);
+        ctx.fillStyle = '#ef4444';
+        ctx.font = '14px sans-serif';
+        ctx.fillText('❤'.repeat(Math.max(0, s.lives)), s.x, s.y - SUMO_R - 4);
+        ctx.textAlign = 'left';
+      }
+
+      function shade(hex, amt) {
+        const n = parseInt(hex.slice(1), 16);
+        let r = (n >> 16) + amt, g = ((n >> 8) & 255) + amt, b = (n & 255) + amt;
+        r = Math.max(0, Math.min(255, r)); g = Math.max(0, Math.min(255, g)); b = Math.max(0, Math.min(255, b));
+        return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+      }
+
+      // ====================================================================
+      //  HUD / overlays
+      // ====================================================================
+      function renderHud() {
+        const hud = $('hud');
+        hud.innerHTML = '';
+        const list = [...sumos.values()].sort((a, b) => a.slot - b.slot);
+        for (const s of list) {
+          const pill = document.createElement('div');
+          pill.className = 'pill' + (s.lives <= 0 ? ' dead' : '');
+          pill.innerHTML = `<span class="dot" style="width:9px;height:9px;border-radius:50%;display:inline-block;background:${s.color}"></span>` +
+            `<span class="nm">${escapeHtml(s.name)}${s.isMe ? ' (toi)' : ''}</span>` +
+            `<span class="hearts">${'❤'.repeat(Math.max(0, s.lives)) || '☠️'}</span>`;
+          hud.appendChild(pill);
+        }
+      }
+
+      let toastTimer = null;
+      function showToast(text, color) {
+        const el = $('toast');
+        el.textContent = text; el.style.color = color || '#fff';
+        el.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove('show'), 1100);
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+
+      function startCountdown() {
+        state = 'countdown'; countdown = 3.2;
+        $('mp-overlay').classList.add('hidden');
+        $('start-overlay').classList.add('hidden');
+        $('end-overlay').classList.add('hidden');
+        $('hud').classList.remove('hidden');
+        renderHud();
+        let n = 3;
+        showToast(n, '#ffd166');
+        const iv = setInterval(() => {
+          n--;
+          if (n > 0) showToast(n, '#ffd166');
+          else if (n === 0) showToast('SUMO !', '#4ade80');
+          else clearInterval(iv);
+        }, 800);
+      }
+
+      function endMatch(winner) {
+        if (state === 'ended') return;
+        state = 'ended';
+        pressing = false;
+        $('hint').classList.add('hidden');
+        const ovl = $('end-overlay');
+        const iWon = winner && winner.isMe;
+        $('end-title').textContent = winner ? (iWon ? '🏆 Victoire !' : `${escapeHtml(winner.name)} gagne`) : 'Égalité';
+        $('end-sub').textContent = winner ? 'Dernier sumo dans l\'arène' : '';
+        const ranked = [...sumos.values()].sort((a, b) => (b.lives - a.lives) || (b.kills || 0) - (a.kills || 0));
+        $('end-list').innerHTML = ranked.map((s, i) =>
+          `<div class="end-row"><span class="rk">${['🥇','🥈','🥉'][i] || (i + 1) + '.'}</span>` +
+          `<span class="nm" style="color:${s.color}">${escapeHtml(s.name)}${s.isMe ? ' (toi)' : ''}</span>` +
+          `<span class="kd">${Math.max(0, s.lives)} ❤</span></div>`
+        ).join('');
+        ovl.classList.remove('hidden');
+
+        if (MP) {
+          $('rematch-btn').classList.toggle('hidden', !isHost);
+          $('rematch-wait').classList.toggle('hidden', isHost);
+        } else {
+          $('rematch-btn').classList.remove('hidden');
+          $('rematch-wait').classList.add('hidden');
+        }
+      }
+
+      // ====================================================================
+      //  MODE SOLO (sans salon) — joueur + bots
+      // ====================================================================
+      function startSolo() {
+        MP = false; myId = 'me';
+        sumos.clear(); particles.length = 0;
+        me = makeSumo('me', 0, MY_NAME, true, false);
+        sumos.set('me', me);
+        const names = ['Tonkatsu', 'Big Bao', 'Dumpling'];
+        for (let i = 1; i <= 3; i++) {
+          const b = makeSumo('bot' + i, i, names[i - 1], false, true);
+          sumos.set(b.id, b);
+        }
+        startCountdown();
+      }
+
+      $('start-btn').addEventListener('click', startSolo);
+      $('rematch-btn').addEventListener('click', () => {
+        if (MP) { if (isHost && net) net.send({ type: 'race-tomenu' }); }
+        else startSolo();
+      });
+
+      // ====================================================================
+      //  MULTIJOUEUR — réseau (réutilise les relais de la course / des tanks)
+      // ====================================================================
+      function makeNet() {
+        const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+        const handlers = new Map();
+        let sock = null; const queue = [];
+        const emit = (t, d) => { const fn = handlers.get(t); if (fn) fn(d); };
+        function connect() {
+          sock = new WebSocket(url);
+          sock.addEventListener('open', () => { queue.forEach((m) => sock.send(m)); queue.length = 0; emit('open'); });
+          sock.addEventListener('message', (ev) => { let m; try { m = JSON.parse(ev.data); } catch { return; } emit(m.type, m); });
+          sock.addEventListener('close', () => emit('close'));
+          sock.addEventListener('error', () => emit('neterror'));
+        }
+        return {
+          on(t, fn) { handlers.set(t, fn); return this; },
+          connect,
+          send(o) { const d = JSON.stringify(o); if (sock && sock.readyState === 1) sock.send(d); else { queue.push(d); if (!sock || sock.readyState > 1) connect(); } },
+        };
+      }
+
+      function mpInit() {
+        net = makeNet();
+        net
+          .on('race-welcome', onWelcome)
+          .on('race-roster', (m) => { if (m.hostId) isHost = m.hostId === myId; renderRoster(m.players); })
+          .on('race-start', onMatchStart)
+          .on('race-peer', (m) => onPeer(m.id, m.s))
+          .on('race-tolobby', onToLobby)
+          .on('race-gone', () => mpFallback('La partie a expiré.'))
+          .on('close', () => { if (state === 'mpwait') mpFallback('Déconnecté du serveur.'); })
+          .on('neterror', () => { if (state === 'mpwait') mpFallback('Connexion impossible.'); });
+        $('mp-overlay').classList.remove('hidden');
+        state = 'mpwait';
+        net.connect();
+        net.send({ type: 'race-hello', code: ROOM, pid: MY_PID, name: MY_NAME });
+      }
+
+      function onWelcome(m) {
+        myId = m.you; isHost = m.hostId === myId;
+        renderRoster(m.players);
+        if (m.phase === 'racing') $('mp-sub').textContent = 'Combat en cours… tu joueras à la prochaine manche.';
+      }
+
+      function renderRoster(players) {
+        const ul = $('mp-players');
+        ul.innerHTML = '';
+        players.forEach((p) => {
+          const li = document.createElement('li');
+          li.className = 'player';
+          const col = COLORS[(p.slot ?? 0) % COLORS.length];
+          li.innerHTML = `<span class="dot" style="color:${col};background:${col}"></span>` +
+            `<span class="pname">${escapeHtml(p.name)}${p.id === myId ? ' (toi)' : ''}</span>` +
+            (p.isHost ? '<span class="badge">Hôte</span>' : '') +
+            (p.connected ? '' : '<span class="off">hors-ligne</span>');
+          ul.appendChild(li);
+        });
+        $('mp-start').classList.toggle('hidden', !isHost);
+        $('mp-wait').classList.toggle('hidden', isHost);
+        $('mp-sub').textContent = isHost ? 'Lance le combat quand tout le monde est prêt 🤼' : "En attente que l'hôte lance la partie…";
+      }
+
+      $('mp-start').addEventListener('click', () => { if (isHost && net) net.send({ type: 'race-go' }); });
+
+      // Top départ : on (re)crée tous les sumos à partir de la liste du serveur.
+      function onMatchStart(m) {
+        sumos.clear(); particles.length = 0;
+        const sorted = [...m.players].sort((a, b) => a.slot - b.slot);
+        for (const e of sorted) {
+          const s = makeSumo(e.id, e.slot, e.name, e.id === myId, false);
+          sumos.set(e.id, s);
+          if (e.id === myId) me = s;
+        }
+        if (!me) { me = makeSumo(myId, 0, MY_NAME, true, false); sumos.set(myId, me); }
+        startCountdown();
+      }
+
+      // État reçu d'un pair : [x, y, angle, lives, alive, invuln, vx, vy]
+      function onPeer(id, s) {
+        const t = sumos.get(id);
+        if (!t || t.isMe || !s) return;
+        t.tx = s[0]; t.ty = s[1]; t.tangle = s[2];
+        const wasAlive = t.alive;
+        t.lives = s[3]; t.alive = !!s[4]; t.invuln = s[5] ? Math.max(t.invuln, 0.1) : 0;
+        t.tvx = s[6] || 0; t.tvy = s[7] || 0;
+        if (wasAlive && !t.alive) spawnFall(t.x, t.y, t.color);
+        renderHud();
+      }
+
+      function onToLobby() {
+        // Retour en salle d'attente pour une revanche.
+        state = 'mpwait';
+        sumos.clear(); particles.length = 0;
+        $('end-overlay').classList.add('hidden');
+        $('hud').classList.add('hidden');
+        $('hint').classList.add('hidden');
+        $('mp-overlay').classList.remove('hidden');
+      }
+
+      function mpFallback(message) {
+        MP = false; net = null;
+        const err = document.createElement('div');
+        err.id = 'err'; err.textContent = message + ' Tu peux jouer contre des bots.';
+        document.body.appendChild(err);
+        setTimeout(() => err.remove(), 5000);
+        $('mp-overlay').classList.add('hidden');
+        $('start-overlay').classList.remove('hidden');
+      }
+
+      // ====================================================================
+      //  DÉMARRAGE
+      // ====================================================================
+      if (MP) {
+        mpInit();
+      } else {
+        $('start-overlay').classList.remove('hidden');
+        state = 'boot';
+      }
+      requestAnimationFrame(loop);
+    </script>
+  </body>
+</html>

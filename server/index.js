@@ -16,6 +16,12 @@ const GAMES = [
   { id: 'minigolf',   label: 'Mini Golf',  emoji: '⛳', url: 'minigolf.html' },
   { id: 'racing',     label: 'Course',     emoji: '🏎️', url: 'racing.html' },
   { id: 'colorhunt',  label: 'Color Hunt', emoji: '🎨', url: 'colorhunt.html' },
+  { id: 'sprint',     label: 'Sprint',     emoji: '🏃', url: 'sprint.html' },
+  { id: 'tanks',      label: 'Tanks',      emoji: '💥', url: 'tanks.html' },
+  { id: 'chickenrun', label: 'Chicken Run', emoji: '🐔', url: 'chickenrun.html' },
+  { id: 'sumo',       label: 'Sumo',       emoji: '🤼', url: 'sumo.html' },
+  { id: 'charge',     label: 'Chargé',     emoji: '⚡', url: 'charge.html' },
+  { id: 'synchro',    label: 'Synchro',    emoji: '🔗', url: 'synchro.html' },
 ];
 
 const SEGMENT_COLORS = ['#4ade80', '#38bdf8', '#22a85a', '#0ea5e9', '#a78bfa', '#f59e0b'];
@@ -185,10 +191,6 @@ wss.on('connection', (socket) => {
         if (currentRoom) leaveRoom();
         const code = makeCode();
         playerId = makeId();
-<<<<<<< HEAD
-        const player = { id: playerId, name: sanitizeName(msg.name), socket };
-        const room = { code, hostId: playerId, players: new Map([[playerId, player]]), started: false };
-=======
         const player = { id: playerId, name: sanitizeName(msg.name), socket, connected: true };
         const room = {
           code,
@@ -196,7 +198,6 @@ wss.on('connection', (socket) => {
           players: new Map([[playerId, player]]),
           started: false,
         };
->>>>>>> 7409af55c593a31c2d69fb7cbca1dc6c8b846511
         rooms.set(code, room);
         currentRoom = room;
         send(socket, { type: 'created', code, playerId, players: publicPlayers(room) });
