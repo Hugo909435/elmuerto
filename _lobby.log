@@ -1,0 +1,5 @@
+
+> mini-golf@1.0.0 server
+> node server/index.js
+
+Serveur de lobby en écoute sur ws://localhost:8080

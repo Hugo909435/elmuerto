@@ -83,10 +83,26 @@ ws.on('error', (e) => { console.log('ERROR', e.message); process.exit(1); });
 Lance-le sur `wss://<host-du-tunnel>/ws`. Si ça affiche « OK code = … », le
 multijoueur fonctionne depuis le téléphone.
 
-## 6. Donner le résultat à l'utilisateur
+## 6. Afficher le QR code dans le terminal (toujours)
+Génère **systématiquement** (sans demander) un QR code ASCII de `$URL/` et
+affiche-le dans le terminal, dans un bloc de code, pour que l'utilisateur puisse
+le scanner directement avec l'appareil photo de son téléphone. Récupère-le via
+qrenco.de (renvoie un QR en caractères Unicode) :
+```
+curl -s "https://qrenco.de/<URL>/" -H "User-Agent: curl"
+```
+Recopie le résultat tel quel dans un bloc ``` ``` ``` dans ta réponse. Si
+qrenco.de échoue (pas de réseau, etc.), bascule en secours sur un PNG :
+```powershell
+$enc = [uri]::EscapeDataString("<URL>/")
+Invoke-WebRequest -Uri "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=$enc" -OutFile ".\qr-launch.png" -UseBasicParsing
+```
+et indique le chemin du fichier `qr-launch.png`.
+
+## 7. Donner le résultat à l'utilisateur
 Termine par un message court et clair façon :
 
-> 📱 **Ouvre cette URL sur ton téléphone :**
+> 📱 **Ouvre cette URL sur ton téléphone (ou scanne le QR code ci-dessus) :**
 > ### 👉 `<URL>/`
 > (Color Hunt seul : `<URL>/colorhunt.html`)
 >
@@ -100,5 +116,5 @@ Termine par un message court et clair façon :
   5180 puis relance vite.
 - Ne lance jamais ces process au premier plan (ça bloquerait la session) :
   toujours `run_in_background: true`.
-- Si l'utilisateur veut un QR code de l'URL, propose-le mais ne le fais que s'il
-  le demande.
+- Le QR code ASCII (étape 6) est désormais affiché **automatiquement à chaque
+  lancement** dans le terminal — pas besoin que l'utilisateur le demande.

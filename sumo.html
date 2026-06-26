@@ -104,7 +104,7 @@
     <a id="home-btn" href="/" aria-label="Retour">←</a>
 
     <div id="hud" class="hidden"></div>
-    <div id="hint" class="hidden">Lâche pour <b>tourner</b> (viser) · <b>Maintiens</b> pour <b>foncer</b> et pousser</div>
+    <div id="hint" class="hidden">Lâche pour <b>tourner</b> · <b>Maintiens</b> pour <b>foncer</b> · fonce longtemps pour <b>🔥 t'enflammer</b></div>
 
     <div id="toast"></div>
 
@@ -120,7 +120,7 @@
     <!-- Écran de départ solo (sans salon) -->
     <div id="start-overlay" class="overlay hidden">
       <h1>🤼 EL MUERTO SUMO</h1>
-      <p>Ton sumo <b>tourne tout seul</b> sur lui-même quand tu ne touches rien.<br /><b>Maintiens</b> l'écran pour <b>foncer tout droit</b> et <b>pousser</b> les autres hors du cercle.<br />Dernier sumo dans l'arène gagne&nbsp;!</p>
+      <p>Ton sumo <b>tourne tout seul</b> sur lui-même quand tu ne touches rien.<br /><b>Maintiens</b> l'écran pour <b>foncer tout droit</b> et <b>pousser</b> les autres hors du cercle.<br />Reste à fond assez longtemps et tu <b>🔥 prends feu</b> : tu projettes les autres bien plus loin&nbsp;!<br />Le ring <b>rétrécit</b> à chaque élimination (la zone rouge clignote avant de disparaître).<br />Dernier sumo dans l'arène gagne&nbsp;!</p>
       <button id="start-btn" class="btn">Jouer contre des bots</button>
     </div>
 
@@ -163,23 +163,71 @@
       // ---- Constantes de jeu ----
       const ARENA = 1200;               // espace logique carré
       const CX = ARENA / 2, CY = ARENA / 2;
-      const RING_R = 500;               // rayon du cercle de combat (bord = chute)
-      const SUMO_R = 42;                // rayon d'un sumo
+      // Le ring s'adapte au nombre de joueurs (2 → petit, 8 → grand) et
+      // rétrécit à chaque élimination. ring.r est le rayon de collision courant.
+      const RING_MIN = 230;             // rayon à 2 joueurs
+      const RING_MAX = 500;             // rayon à 8 joueurs
+      const WARN_TIME = 4.0;            // s de clignotement avant le rétrécissement
+      const SHRINK_SPEED = 110;         // px/s de rétrécissement du bord
+      const SUMO_R = 44;                // rayon d'un sumo
       const TURN_SPEED = 2.7;           // rad/s de rotation sur soi (au repos)
       const ACCEL = 1500;               // px/s² en marche avant (maintien)
       const MAX_SPEED = 540;            // px/s vitesse max sous propulsion
       const DAMP = 2.4;                 // amortissement (frottement) par seconde
-      const RESTITUTION = 0.55;         // rebond des collisions sumo-sumo
-      const PUSH_BONUS = 1.18;          // gain de poussée quand on charge (maintien)
+      const RESTITUTION = 0.78;         // rebond des collisions sumo-sumo
+      const PUSH_BONUS = 1.4;           // gain de poussée quand on charge (maintien)
+      const FIRE_TIME = 1.1;            // s de charge pleine puissance avant de s'enflammer
+      const FIRE_PUSH = 2.4;            // poussée d'un sumo en feu (bien plus violente)
+      const FIRE_SPEED = 1.28;          // bonus de vitesse max quand on est en feu
       const LIVES = 3;
       const RESPAWN_DELAY = 1.3;        // s avant réapparition
       const INVULN_TIME = 1.6;          // s d'invincibilité après respawn
 
-      // Points d'apparition répartis sur un anneau intérieur.
-      const SPAWNS = Array.from({ length: 8 }, (_, i) => {
-        const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
-        return { x: CX + Math.cos(a) * RING_R * 0.55, y: CY + Math.sin(a) * RING_R * 0.55 };
-      });
+      // Point d'apparition d'un slot, sur un anneau intérieur au ring courant
+      // (on reste bien à l'intérieur même si le ring est en train de rétrécir).
+      function spawnPoint(slot) {
+        const a = (slot / 8) * Math.PI * 2 - Math.PI / 2;
+        const rr = Math.min(ring.r, ring.target) * 0.55;
+        return { x: CX + Math.cos(a) * rr, y: CY + Math.sin(a) * rr };
+      }
+
+      // État du ring qui rétrécit.
+      const ring = {
+        r: RING_MAX,         // rayon de collision courant
+        target: RING_MAX,    // rayon visé après le prochain rétrécissement
+        warn: 0,             // temps de clignotement restant (r ne bouge pas tant que > 0)
+        danger: 0,           // rayon extérieur de la zone condamnée qui clignote
+      };
+
+      function radiusForPlayers(n) {
+        const c = Math.max(2, Math.min(8, n));
+        return Math.round(RING_MIN + ((c - 2) / 6) * (RING_MAX - RING_MIN));
+      }
+      function countRemaining() {
+        let n = 0;
+        for (const s of sumos.values()) if (s.lives > 0) n++;
+        return n;
+      }
+      // (Re)dimensionne le ring instantanément au lancement d'une manche.
+      function resetRing() {
+        const r = radiusForPlayers(Math.max(2, sumos.size));
+        ring.r = r; ring.target = r; ring.warn = 0; ring.danger = 0;
+      }
+      // Déclenche le clignotement puis le rétrécissement quand des joueurs sortent.
+      function updateRing(dt) {
+        const desired = radiusForPlayers(countRemaining());
+        if (desired < ring.target - 0.5) {
+          ring.target = desired;
+          ring.danger = ring.r;     // la zone [target, r] va disparaître → clignote
+          ring.warn = WARN_TIME;    // on prévient d'abord, sans toucher au bord
+        }
+        if (ring.warn > 0) {
+          ring.warn -= dt;          // phase d'alerte : le bord (collision) ne change pas
+        } else if (ring.r > ring.target) {
+          ring.r = Math.max(ring.target, ring.r - SHRINK_SPEED * dt);
+          if (ring.r <= ring.target + 0.5) ring.danger = 0;
+        }
+      }
 
       // ---- État ----
       let net = null, myId = MP ? MY_PID : 'me', isHost = false;
@@ -190,7 +238,7 @@
       let countdown = 0, netAccum = 0;
 
       function makeSumo(id, slot, name, isMe, isBot) {
-        const sp = SPAWNS[slot % SPAWNS.length];
+        const sp = spawnPoint(slot % 8);
         // angle dirigé vers le centre au départ
         const toC = Math.atan2(CY - sp.y, CX - sp.x);
         return {
@@ -201,6 +249,8 @@
           lives: LIVES, alive: true,
           invuln: INVULN_TIME, respawn: 0,
           kills: 0,
+          // charge / feu
+          chargeTime: 0, onFire: false,
           // interpolation réseau
           tx: sp.x, ty: sp.y, tangle: toC, tvx: 0, tvy: 0,
           // IA
@@ -218,12 +268,16 @@
       window.addEventListener('resize', resizeCanvas);
       resizeCanvas();
 
-      // Échelle pour faire tenir toute l'arène à l'écran (letterbox).
+      // Échelle : on zoome sur le ring (et non sur toute l'arène) pour qu'il
+      // remplisse l'écran. On garde une marge pour les pseudos au-dessus des sumos.
       function viewTransform() {
         const vw = canvas.width, vh = canvas.height;
-        const scale = Math.min(vw / ARENA, vh / ARENA) * 0.98;
-        const ox = (vw - ARENA * scale) / 2;
-        const oy = (vh - ARENA * scale) / 2;
+        // La vue suit le rayon courant → le ring remplit l'écran et le zoom
+        // se resserre doucement à mesure qu'il rétrécit.
+        const FIT = ring.r * 2 + 170;            // zone visible = ring + marge
+        const scale = Math.min(vw / FIT, vh / FIT);
+        const ox = vw / 2 - CX * scale;          // arène centrée à l'écran
+        const oy = vh / 2 - CY * scale;
         return { scale, ox, oy };
       }
 
@@ -265,6 +319,7 @@
           countdown -= dt;
           if (countdown <= 0) { state = 'playing'; $('hint').classList.remove('hidden'); }
         }
+        if (state === 'playing') updateRing(dt);
 
         for (const s of sumos.values()) {
           // Mort / réapparition
@@ -302,7 +357,7 @@
           if (!s.alive || s.invuln > 0) continue;
           if (!s.isMe && !s.isBot) continue;        // les pairs gèrent eux-mêmes leur chute
           const d = Math.hypot(s.x - CX, s.y - CY);
-          if (d > RING_R) fallOut(s);
+          if (d > ring.r) fallOut(s);
         }
 
         // Particules
@@ -320,7 +375,7 @@
             net && net.send({ type: 'race-state', s: [
               Math.round(me.x), Math.round(me.y), +me.angle.toFixed(2),
               me.lives, me.alive ? 1 : 0, me.invuln > 0 ? 1 : 0,
-              Math.round(me.vx), Math.round(me.vy),
+              Math.round(me.vx), Math.round(me.vy), me.onFire ? 1 : 0,
             ] });
           }
         }
@@ -333,13 +388,24 @@
         if (accelerating) {
           s.vx += Math.cos(s.angle) * ACCEL * dt;
           s.vy += Math.sin(s.angle) * ACCEL * dt;
+          const cap = MAX_SPEED * (s.onFire ? FIRE_SPEED : 1);
           const sp = Math.hypot(s.vx, s.vy);
-          if (sp > MAX_SPEED) { s.vx = s.vx / sp * MAX_SPEED; s.vy = s.vy / sp * MAX_SPEED; }
+          if (sp > cap) { s.vx = s.vx / sp * cap; s.vy = s.vy / sp * cap; }
           s._charging = true;
+          // On accumule la charge tant qu'on fonce vraiment à fond et tout droit.
+          if (sp > MAX_SPEED * 0.9) s.chargeTime += dt;
+          const wasFire = s.onFire;
+          if (s.chargeTime >= FIRE_TIME) s.onFire = true;
+          if (s.onFire && !wasFire) {
+            spawnImpact(s.x, s.y);
+            if (s.isMe) showToast('🔥 EN FEU !', '#ff7a18');
+          }
         } else {
-          // Au repos : on tourne sur soi pour viser.
+          // Au repos : on tourne sur soi pour viser. On perd vite sa chauffe.
           s.angle += s.spin * TURN_SPEED * dt;
           s._charging = false;
+          s.chargeTime = 0;
+          s.onFire = false;
         }
         // Frottement (toujours actif → on glisse puis on s'arrête).
         const f = Math.exp(-DAMP * dt);
@@ -367,9 +433,10 @@
 
             // Vitesse relative le long de la normale.
             const rvn = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
-            // Bonus de poussée : un sumo qui charge (maintien) frappe plus fort.
-            const boostA = a._charging ? PUSH_BONUS : 1;
-            const boostB = b._charging ? PUSH_BONUS : 1;
+            // Bonus de poussée : un sumo qui charge frappe plus fort, et un
+            // sumo EN FEU frappe beaucoup plus fort (projette l'autre au loin).
+            const boostA = a.onFire ? FIRE_PUSH : (a._charging ? PUSH_BONUS : 1);
+            const boostB = b.onFire ? FIRE_PUSH : (b._charging ? PUSH_BONUS : 1);
             let jimp = 0;
             if (rvn < 0) jimp = -(1 + RESTITUTION) * rvn / 2;
 
@@ -399,6 +466,7 @@
         s.alive = false;
         s.respawn = RESPAWN_DELAY;
         s.vx = 0; s.vy = 0;
+        s.onFire = false; s.chargeTime = 0;
         renderHud();
         if (s.isMe) {
           showToast(s.lives > 0 ? '😵 Éjecté !' : '☠️ KO', s.lives > 0 ? '#f59e0b' : '#ef4444');
@@ -406,11 +474,12 @@
       }
 
       function respawnSumo(s) {
-        const sp = SPAWNS[(s.slot + (s.lives % 4)) % SPAWNS.length];
+        const sp = spawnPoint((s.slot + (s.lives % 4)) % 8);
         s.x = sp.x; s.y = sp.y; s.tx = sp.x; s.ty = sp.y;
         s.vx = 0; s.vy = 0;
         s.angle = Math.atan2(CY - sp.y, CX - sp.x);
         s.alive = true; s.invuln = INVULN_TIME;
+        s.onFire = false; s.chargeTime = 0;
       }
 
       function checkWin() {
@@ -432,7 +501,9 @@
       function updateBot(s, dt) {
         s.aiTimer -= dt;
         const dCenter = Math.hypot(s.x - CX, s.y - CY);
-        const nearEdge = dCenter > RING_R * 0.74;
+        // En alerte de rétrécissement, les bots se méfient déjà du futur bord.
+        const edgeRef = (ring.warn > 0 ? ring.target : ring.r);
+        const nearEdge = dCenter > edgeRef * 0.74;
         const target = nearestEnemy(s);
 
         if (s.aiTimer <= 0) {
@@ -497,6 +568,11 @@
         const a = Math.random() * Math.PI * 2, sp = 30 + Math.random() * 60;
         particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.3, color, r: 2 + Math.random() * 2 });
       }
+      function spawnFire(x, y) {
+        const a = Math.random() * Math.PI * 2, sp = 40 + Math.random() * 120;
+        const cols = ['#ffcf3a', '#ff7a18', '#ff3b18'];
+        particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 60, life: 0.25 + Math.random() * 0.25, color: cols[(Math.random() * cols.length) | 0], r: 3 + Math.random() * 5 });
+      }
 
       // ====================================================================
       //  RENDU
@@ -513,29 +589,47 @@
         ctx.fillStyle = '#151020';
         ctx.fillRect(0, 0, ARENA, ARENA);
 
+        const R = ring.r;
         // Halo sous le ring
-        const grd = ctx.createRadialGradient(CX, CY, RING_R * 0.2, CX, CY, RING_R + 40);
+        const grd = ctx.createRadialGradient(CX, CY, R * 0.2, CX, CY, R + 40);
         grd.addColorStop(0, 'rgba(244,114,182,0.10)');
         grd.addColorStop(1, 'rgba(244,114,182,0)');
         ctx.fillStyle = grd;
-        ctx.beginPath(); ctx.arc(CX, CY, RING_R + 40, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(CX, CY, R + 40, 0, Math.PI * 2); ctx.fill();
 
         // Le dohyo (cercle de combat)
-        ctx.beginPath(); ctx.arc(CX, CY, RING_R, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(CX, CY, R, 0, Math.PI * 2);
         ctx.fillStyle = '#3a2a1c';
         ctx.fill();
         // anneaux concentriques décoratifs
         ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 3;
-        for (let r = RING_R - 70; r > 60; r -= 90) {
+        for (let r = R - 70; r > 60; r -= 90) {
           ctx.beginPath(); ctx.arc(CX, CY, r, 0, Math.PI * 2); ctx.stroke();
         }
+
+        // Zone condamnée : pendant l'alerte, l'anneau [target, r] clignote en
+        // rouge pour prévenir avant que le bord ne se resserre (pas de mort surprise).
+        if (ring.warn > 0 && ring.danger > ring.target + 1) {
+          const t = performance.now() / 90;
+          const pulse = 0.28 + 0.32 * (0.5 + 0.5 * Math.sin(t));
+          ctx.beginPath();
+          ctx.arc(CX, CY, ring.danger, 0, Math.PI * 2);
+          ctx.arc(CX, CY, ring.target, 0, Math.PI * 2, true);
+          ctx.fillStyle = `rgba(239,68,68,${pulse})`;
+          ctx.fill('evenodd');
+          // future limite (clignote en orange)
+          ctx.lineWidth = 7;
+          ctx.strokeStyle = `rgba(255,170,40,${0.5 + 0.5 * Math.sin(t)})`;
+          ctx.beginPath(); ctx.arc(CX, CY, ring.target, 0, Math.PI * 2); ctx.stroke();
+        }
+
         // bord du ring (la limite)
         ctx.lineWidth = 12;
         ctx.strokeStyle = '#f4f0e6';
-        ctx.beginPath(); ctx.arc(CX, CY, RING_R, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(CX, CY, R, 0, Math.PI * 2); ctx.stroke();
         ctx.lineWidth = 4;
         ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-        ctx.beginPath(); ctx.arc(CX, CY, RING_R - 8, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(CX, CY, R - 8, 0, Math.PI * 2); ctx.stroke();
         // marque centrale
         ctx.fillStyle = 'rgba(255,255,255,0.06)';
         ctx.beginPath(); ctx.arc(CX, CY, 22, 0, Math.PI * 2); ctx.fill();
@@ -556,20 +650,36 @@
         const speed = Math.hypot(s.vx, s.vy);
         // poussière sous les pieds quand on charge vite
         if (s._charging && speed > 180 && Math.random() < 0.6) spawnDust(s.x - Math.cos(s.angle) * SUMO_R, s.y - Math.sin(s.angle) * SUMO_R, '#d6c4a0');
+        // traînée de flammes quand on est en feu
+        if (s.onFire) {
+          for (let i = 0; i < 3; i++) {
+            spawnFire(s.x + (Math.random() - 0.5) * SUMO_R * 1.4, s.y + (Math.random() - 0.5) * SUMO_R * 1.4);
+          }
+        }
 
         ctx.save();
         ctx.translate(s.x, s.y);
         if (s.invuln > 0) ctx.globalAlpha = 0.45 + 0.4 * Math.sin(performance.now() / 70);
+
+        // halo de feu sous le sumo embrasé
+        if (s.onFire) {
+          const fg = ctx.createRadialGradient(0, 0, SUMO_R * 0.4, 0, 0, SUMO_R * 1.9);
+          fg.addColorStop(0, 'rgba(255,140,30,0.55)');
+          fg.addColorStop(1, 'rgba(255,60,0,0)');
+          ctx.fillStyle = fg;
+          ctx.beginPath(); ctx.arc(0, 0, SUMO_R * 1.9, 0, Math.PI * 2); ctx.fill();
+        }
 
         // ombre
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         ctx.beginPath(); ctx.ellipse(0, SUMO_R * 0.5, SUMO_R, SUMO_R * 0.55, 0, 0, Math.PI * 2); ctx.fill();
 
         ctx.rotate(s.angle);
-        // aura de charge
-        if (s._charging) {
-          ctx.strokeStyle = 'rgba(255,226,122,0.7)'; ctx.lineWidth = 5;
-          ctx.beginPath(); ctx.arc(0, 0, SUMO_R + 6, -0.9, 0.9); ctx.stroke();
+        // aura de charge (orange vif et plus large quand on est en feu)
+        if (s._charging || s.onFire) {
+          ctx.strokeStyle = s.onFire ? 'rgba(255,90,20,0.9)' : 'rgba(255,226,122,0.7)';
+          ctx.lineWidth = s.onFire ? 8 : 5;
+          ctx.beginPath(); ctx.arc(0, 0, SUMO_R + (s.onFire ? 10 : 6), -0.9, 0.9); ctx.stroke();
         }
         // corps rond
         const g = ctx.createRadialGradient(-SUMO_R * 0.3, -SUMO_R * 0.3, SUMO_R * 0.2, 0, 0, SUMO_R);
@@ -644,6 +754,7 @@
 
       function startCountdown() {
         state = 'countdown'; countdown = 3.2;
+        resetRing();
         $('mp-overlay').classList.add('hidden');
         $('start-overlay').classList.add('hidden');
         $('end-overlay').classList.add('hidden');
@@ -785,7 +896,7 @@
         startCountdown();
       }
 
-      // État reçu d'un pair : [x, y, angle, lives, alive, invuln, vx, vy]
+      // État reçu d'un pair : [x, y, angle, lives, alive, invuln, vx, vy, onFire]
       function onPeer(id, s) {
         const t = sumos.get(id);
         if (!t || t.isMe || !s) return;
@@ -793,6 +904,7 @@
         const wasAlive = t.alive;
         t.lives = s[3]; t.alive = !!s[4]; t.invuln = s[5] ? Math.max(t.invuln, 0.1) : 0;
         t.tvx = s[6] || 0; t.tvy = s[7] || 0;
+        t.onFire = !!s[8];
         if (wasAlive && !t.alive) spawnFall(t.x, t.y, t.color);
         renderHud();
       }
