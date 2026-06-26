@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Synchro — El Muerto Arcade</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 100%; height: 100%; overflow: hidden;
+        background: #0b1020; color: #fff;
+        font-family: 'Trebuchet MS', system-ui, sans-serif;
+        -webkit-user-select: none; user-select: none;
+        touch-action: manipulation;
+      }
+
+      /* ---- Bouton retour ---- */
+      #home-btn {
+        position: fixed;
+        top: max(10px, env(safe-area-inset-top)); left: 10px;
+        z-index: 20;
+        display: flex; align-items: center; justify-content: center;
+        text-decoration: none; background: rgba(0,0,0,0.6);
+        border: 1px solid rgba(255,255,255,0.15); border-radius: 50%;
+        width: 42px; height: 42px; font-size: 19px; color: #fff;
+      }
+
+      /* ---- Bande joueurs ---- */
+      #players-bar {
+        position: fixed; top: 0; left: 0; right: 0;
+        display: flex; align-items: center; justify-content: center;
+        flex-wrap: wrap;
+        padding: max(10px, env(safe-area-inset-top)) 10px 8px 60px;
+        background: rgba(0,0,0,0.55); backdrop-filter: blur(10px);
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        gap: 14px; z-index: 10;
+      }
+      #players-bar.hidden { display: none; }
+      .player-chip {
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+        min-width: 44px;
+      }
+      .player-avatar {
+        width: 36px; height: 36px; border-radius: 50%;
+        background: rgba(255,255,255,0.15);
+        border: 2px solid rgba(255,255,255,0.3);
+        font-size: 15px; font-weight: 800;
+        display: flex; align-items: center; justify-content: center;
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      }
+      .player-chip.done .player-avatar {
+        border-color: #4ade80;
+        box-shadow: 0 0 10px rgba(74,222,128,0.6);
+      }
+      .player-pname {
+        font-size: 9px; opacity: 0.75; max-width: 52px;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;
+      }
+
+      /* ---- Zone de jeu ---- */
+      #play {
+        position: fixed; inset: 0; z-index: 5;
+        display: none; flex-direction: column;
+        align-items: center; justify-content: center;
+        padding: 100px 22px max(28px, env(safe-area-inset-bottom));
+        gap: 20px;
+      }
+      #play.show { display: flex; }
+
+      #round-pill {
+        font-size: 12px; letter-spacing: 1px; text-transform: uppercase;
+        opacity: 0.6; font-weight: 700;
+      }
+
+      .question-card {
+        width: 100%; max-width: 460px;
+        background: linear-gradient(160deg, rgba(124,92,255,0.18), rgba(90,53,224,0.10));
+        border: 1px solid rgba(124,92,255,0.35);
+        border-radius: 22px; padding: 26px 22px;
+        text-align: center;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+      }
+      .question-emoji { font-size: 44px; }
+      .question-text {
+        font-size: clamp(24px, 7vw, 38px); font-weight: 900;
+        line-height: 1.2; margin-top: 8px;
+      }
+
+      /* ---- Barre de timer ---- */
+      #timer-bar-wrap {
+        width: 100%; max-width: 460px;
+        height: 7px; border-radius: 999px; background: rgba(255,255,255,0.16);
+      }
+      #timer-bar {
+        height: 100%; border-radius: 999px; background: #4ade80;
+        transition: width 1s linear, background 0.4s ease; width: 100%;
+      }
+
+      /* ---- Saisie ---- */
+      #answer-form {
+        width: 100%; max-width: 460px;
+        display: flex; flex-direction: column; gap: 12px; align-items: center;
+      }
+      #answer-input {
+        width: 100%; text-align: center;
+        font-size: clamp(22px, 6vw, 30px); font-weight: 800;
+        padding: 16px 18px; border-radius: 16px;
+        background: rgba(255,255,255,0.08);
+        border: 2px solid rgba(255,255,255,0.18);
+        color: #fff; outline: none;
+        text-transform: lowercase;
+        transition: border-color 0.2s ease;
+      }
+      #answer-input::placeholder { color: rgba(255,255,255,0.35); font-weight: 600; text-transform: none; }
+      #answer-input:focus { border-color: #7c5cff; }
+      #answer-input:disabled { opacity: 0.6; }
+      .hint { font-size: 12px; opacity: 0.6; }
+
+      .btn {
+        cursor: pointer; border: none; border-radius: 999px;
+        padding: 15px 38px; font-size: 18px; font-weight: 800;
+        letter-spacing: 1px; text-transform: uppercase;
+        background: linear-gradient(180deg, #7c5cff, #5a35e0);
+        color: #fff; box-shadow: 0 8px 24px rgba(124,92,255,0.4);
+        transition: transform 0.1s ease;
+      }
+      .btn:active { transform: scale(0.95); }
+      .btn:disabled { opacity: 0.4; box-shadow: none; }
+      .btn-wide { width: 100%; max-width: 460px; }
+
+      /* ---- État « réponse verrouillée » ---- */
+      #locked {
+        width: 100%; max-width: 460px;
+        display: none; flex-direction: column; align-items: center; gap: 10px;
+        text-align: center;
+      }
+      #locked.show { display: flex; }
+      #locked .lock-word {
+        font-size: clamp(28px, 8vw, 40px); font-weight: 900; color: #4ade80;
+        text-transform: lowercase;
+      }
+      #locked .lock-sub { font-size: 14px; opacity: 0.75; }
+
+      /* ---- Overlays ---- */
+      .overlay {
+        position: fixed; inset: 0; z-index: 30;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        text-align: center; gap: 18px;
+        padding: max(28px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
+        background: rgba(8,8,14,0.93); backdrop-filter: blur(6px);
+      }
+      .overlay.hidden { display: none; }
+      .overlay h1 { font-size: clamp(28px, 8vw, 50px); letter-spacing: 1px; }
+      .overlay p { font-size: clamp(14px, 4vw, 19px); opacity: 0.85; max-width: 440px; line-height: 1.5; }
+      .mp-waiting-icon { font-size: 52px; }
+
+      /* ---- Résultat d'une question ---- */
+      #round-result-overlay { justify-content: flex-start; padding-top: max(40px, env(safe-area-inset-top)); gap: 14px; }
+      #rr-question { font-size: clamp(20px, 6vw, 30px); font-weight: 900; }
+      #rr-points {
+        font-size: clamp(22px, 7vw, 34px); font-weight: 900; color: #ffe27a;
+        min-height: 1.2em;
+      }
+      #rr-groups { width: 100%; max-width: 440px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+      .ans-group {
+        display: flex; align-items: center; gap: 12px;
+        padding: 12px 16px; border-radius: 14px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        transform: translateY(16px); opacity: 0;
+        transition: transform 0.4s ease, opacity 0.4s ease;
+      }
+      .ans-group.visible { transform: translateY(0); opacity: 1; }
+      .ans-group.match { background: rgba(74,222,128,0.12); border-color: rgba(74,222,128,0.4); }
+      .ag-word { font-weight: 900; font-size: 18px; text-transform: lowercase; flex-shrink: 0; }
+      .ag-who { flex: 1; text-align: left; font-size: 13px; opacity: 0.85; }
+      .ag-count {
+        font-size: 13px; font-weight: 800; padding: 3px 10px; border-radius: 999px;
+        background: rgba(255,255,255,0.12);
+      }
+      .ans-group.match .ag-count { background: rgba(74,222,128,0.3); color: #d6ffe2; }
+
+      /* ---- Classement final ---- */
+      #score-reveal-overlay { justify-content: flex-start; padding-top: max(48px, env(safe-area-inset-top)); gap: 12px; }
+      #reveal-list { width: 100%; max-width: 400px; flex: 1; overflow-y: auto; }
+      .rp-entry {
+        display: flex; align-items: center; gap: 12px;
+        padding: 12px 16px; border-radius: 14px;
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.1);
+        margin-bottom: 10px;
+        transform: translateY(20px); opacity: 0;
+        transition: transform 0.45s ease, opacity 0.45s ease;
+      }
+      .rp-entry.visible { transform: translateY(0); opacity: 1; }
+      .rp-entry.winner { background: rgba(255,226,122,0.12); border-color: rgba(255,226,122,0.35); }
+      .rp-rank { font-size: 26px; width: 34px; text-align: center; }
+      .rp-name { flex: 1; font-weight: 700; font-size: 15px; text-align: left; }
+      .rp-score { font-size: 20px; font-weight: 900; color: #ffe27a; }
+
+      .hidden { display: none !important; }
+      .score-note {
+        background: rgba(255,226,122,0.10);
+        border: 1px solid rgba(255,226,122,0.28);
+        border-radius: 12px;
+        padding: 10px 18px;
+        font-size: clamp(13px, 3.5vw, 15px);
+        max-width: 420px;
+        line-height: 1.5;
+        text-align: center;
+        color: #ffe27a;
+      }
+    </style>
+  </head>
+  <body>
+    <a id="home-btn" href="/" aria-label="Retour">←</a>
+
+    <!-- Bande joueurs -->
+    <div id="players-bar" class="hidden"></div>
+
+    <!-- Zone de jeu -->
+    <div id="play">
+      <div id="round-pill">Question <span id="q-cur">1</span> / <span id="q-total">3</span></div>
+
+      <div class="question-card">
+        <div class="question-emoji" id="q-emoji">🔗</div>
+        <div class="question-text" id="q-text">—</div>
+      </div>
+
+      <div id="timer-bar-wrap"><div id="timer-bar"></div></div>
+
+      <form id="answer-form" autocomplete="off">
+        <input id="answer-input" type="text" inputmode="text" maxlength="20"
+               placeholder="un seul mot…" autocapitalize="off" autocomplete="off" spellcheck="false" />
+        <button type="submit" id="answer-submit" class="btn btn-wide">Valider</button>
+        <div class="hint">Un seul mot, toujours au singulier 👍</div>
+      </form>
+
+      <div id="locked">
+        <div class="lock-word" id="lock-word">—</div>
+        <div class="lock-sub" id="lock-sub">En attente des autres joueurs…</div>
+      </div>
+    </div>
+
+    <!-- Démarrage / attente connexion -->
+    <div id="mp-wait-overlay" class="overlay">
+      <div class="mp-waiting-icon">🔗</div>
+      <h1>Synchro</h1>
+      <p>Une question s'affiche. Chaque joueur tape <b>un seul mot</b> qui lui vient. Plus vous êtes nombreux à répondre la même chose, plus vous marquez de points !</p>
+      <div class="score-note">🏆 <b>Score :</b> +100 pts par joueur qui dit le même mot que toi. Si <b>tout le monde</b> est synchro : +100 pts bonus !</div>
+      <p id="mp-wait-msg">Connexion…</p>
+    </div>
+
+    <!-- Résultat d'une question -->
+    <div id="round-result-overlay" class="overlay hidden">
+      <div id="rr-question">—</div>
+      <div id="rr-groups"></div>
+      <div id="rr-points">—</div>
+    </div>
+
+    <!-- Classement final -->
+    <div id="score-reveal-overlay" class="overlay hidden">
+      <h1>🏆 Résultats</h1>
+      <div id="reveal-list"></div>
+      <button id="reveal-continue-btn" class="btn hidden">Retour au lobby →</button>
+    </div>
+
+    <!-- Mode solo (ouvert sans partie) -->
+    <div id="solo-overlay" class="overlay hidden">
+      <div class="mp-waiting-icon">🔗</div>
+      <h1>Synchro</h1>
+      <p>Synchro se joue à plusieurs&nbsp;! Le but : taper le <b>même mot</b> que tes amis sans vous concerter. Plus vous êtes nombreux à donner la même réponse, plus vous marquez de points.</p>
+      <div class="score-note">🏆 <b>Score :</b> +100 pts par joueur qui dit le même mot que toi. Si <b>tout le monde</b> est synchro : +100 pts bonus !</div>
+      <p style="opacity:0.6">Lance une partie depuis le lobby et invite du monde.</p>
+      <a href="/" class="btn">Retour au lobby</a>
+    </div>
+
+    <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const show = el => el.classList.add('show');
+      const hideOv = el => el.classList.add('hidden');
+      const showOv = el => el.classList.remove('hidden');
+      const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c =>
+        ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+      // ============================================================
+      //  QUESTIONS — remplace / complète cette liste à volonté.
+      //  Chaque question doit appeler UN SEUL mot, au singulier.
+      // ============================================================
+      const QUESTIONS = [
+        "Un objet dans le garage ?",
+        "Un objet dans le jardin ?",
+        "Un objet décoratif pour Noël ?",
+        "Un objet pour la fête d'anniversaire ?",
+        "Un objet que l'on met dans un sac ?",
+        "Un objet qui sert à écrire ?",
+        "Un objet qui sert à couper ?",
+        "Un objet qui sert à mesurer ?",
+        "Un objet fragile ?",
+        "Un objet solide ?",
+        "Un animal de la forêt ?",
+        "Un animal polaire ?",
+        "Un animal marin géant ?",
+        "Un animal qui vit dans la savane ?",
+        "Un animal domestique inhabituel ?",
+        "Un animal qui pond des œufs ?",
+        "Un animal qui change de couleur ?",
+        "Un animal qui vit sous terre ?",
+        "Un animal que l'on voit souvent dans les zoos ?",
+        "Un animal qui vit dans le ciel ?",
+        "Une plante aquatique ?",
+        "Une plante carnivore ?",
+        "Une plante grimpante ?",
+        "Une plante décorative d'intérieur ?",
+        "Une plante à fleurs colorées ?",
+        "Une plante que l'on mange ?",
+        "Une graine ?",
+        "Une racine comestible ?",
+        "Un champignon ?",
+        "Un arbre fruitier ?",
+        "Un aliment à base de farine ?",
+        "Un aliment frit ?",
+        "Un aliment à base de viande ?",
+        "Un aliment à base de poisson ?",
+        "Un aliment à base de lait ?",
+        "Une boisson alcoolisée ?",
+        "Une boisson non alcoolisée ?",
+        "Un dessert au chocolat ?",
+        "Un dessert à base de fruits ?",
+        "Un dessert glacé ou sorbet ?",
+        "Une soupe ?",
+        "Un plat rapide ?",
+        "Un plat mijoté ?",
+        "Un plat épicé ?",
+        "Un plat végétarien ?",
+        "Un plat vegan ?",
+        "Une pâtisserie française ?",
+        "Une pâtisserie internationale ?",
+        "Un snack salé ?",
+        "Une confiserie ?",
+        "Un outil de jardinage ?",
+        "Un objet dans le grenier ?",
+        "Un objet dans le sous-sol ?",
+        "Un objet dans le bureau ?",
+        "Un objet pour dormir ?",
+        "Un objet pour cuisiner ?",
+        "Un objet pour nettoyer ?",
+        "Un objet pour ranger ?",
+        "Un objet pour décorer ?",
+        "Un objet pour bricoler ?",
+        "Une lampe de bureau ?",
+        "Une lampe de chevet ?",
+        "Un objet lumineux pour l'extérieur ?",
+        "Un objet à piles ?",
+        "Un objet rechargeable ?",
+        "Un objet électronique portable ?",
+        "Un objet pour écouter de la musique ?",
+        "Un objet de sécurité ?",
+        "Un objet multifonction ?",
+        "Un sport aquatique ?",
+        "Un sport de combat ?",
+        "Un sport extrême ?",
+        "Un sport d'équipe célèbre ?",
+        "Un sport individuel célèbre ?",
+        "Un jeu vidéo classique ?",
+        "Un jeu vidéo récent ?",
+        "Un jeu de société stratégique ?",
+        "Un jeu de société pour enfants ?",
+        "Une activité manuelle ?",
+        "Une activité musicale à apprendre ?",
+        "Une activité artistique ?",
+        "Une activité scientifique ?",
+        "Une activité en famille ?",
+        "Une activité entre amis ?",
+        "Un personnage historique ?",
+        "Un personnage mythologique ?",
+        "Un personnage de livre ?",
+        "Un personnage de jeu vidéo ?",
+        "Une activité de plein air ?",
+        "Un vêtement pour la pluie ?",
+        "Un vêtement pour le froid ?",
+        "Un vêtement pour le chaud ?",
+        "Une chaussure d'hiver ?",
+        "Une chaussure d'été ?",
+        "Une chaussure de sport ?",
+        "Un chapeau élégant ?",
+        "Un chapeau pratique ?",
+        "Un gant ?",
+        "Un bonnet ?",
+        "Une écharpe colorée ?",
+        "Une ceinture de cuir ?",
+        "Une montre connectée ?",
+        "Un bijou précieux ?",
+        "Un bijou fantaisie ?",
+        "Un sac de voyage ?",
+        "Un sac pour ordinateur ?",
+        "Une pochette ?",
+        "Une cravate ?",
+        "Un vêtement traditionnel d'Asie ?",
+        "Une émotion positive ?",
+        "Une émotion négative ?",
+        "Une émotion surprenante ?",
+        "Une invention technologique ?",
+        "Une invention du quotidien ?",
+        "Un moyen de transport ancien ?",
+        "Un moyen de transport moderne ?",
+        "Un moyen de transport futuriste ?",
+        "Une ville célèbre pour le tourisme ?",
+        "Une ville célèbre pour l'histoire ?",
+        "Un pays tropical ?",
+        "Un pays froid ?",
+        "Une capitale européenne ?",
+        "Une capitale asiatique ?",
+        "Une capitale africaine ?",
+        "Une unité de temps ?",
+        "Une unité de distance ?",
+        "Une unité de poids ?",
+        "Un outil ancien ?",
+        "Un outil moderne ?",
+        "Une activité dans l'eau ?",
+        "Une activité sur la neige ?",
+        "Une activité en forêt ?",
+        "Une activité en montagne ?",
+        "Une activité dans le désert ?",
+        "Un plat pour le petit-déjeuner ?",
+        "Un plat pour le brunch ?",
+        "Un plat pour le déjeuner ?",
+        "Un plat pour le dîner ?",
+        "Un plat pour un goûter ?",
+        "Un fruit sec rare ?",
+        "Un légume coloré ?",
+        "Une boisson énergisante ?",
+        "Une boisson traditionnelle ?",
+        "Une confiserie à base de sucre ?",
+        "Une pâtisserie chocolatée ?",
+        "Une pâtisserie aux fruits ?",
+        "Un plat végétalien sucré ?",
+        "Un plat végétalien salé ?",
+        "Un aliment à grignoter ?",
+        "Un meuble pour la chambre d'enfant ?",
+        "Un meuble pour la chambre d'adulte ?",
+        "Un meuble modulable ?",
+        "Un meuble ancien ?",
+        "Un meuble moderne ?",
+        "Un objet décoratif mural ?",
+        "Un objet décoratif suspendu ?",
+        "Un objet décoratif pour fenêtre ?",
+        "Un objet décoratif lumineux ?",
+        "Un objet décoratif insolite ?",
+        "Une activité sportive originale ?",
+        "Une activité artistique originale ?",
+        "Une activité musicale originale ?",
+        "Un jeu de société stratégique pour adultes ?",
+        "Un jeu de société simple pour enfants ?",
+        "Une série TV populaire des années 2000 ?",
+        "Une série TV populaire récente ?",
+        "Un film classique ?",
+        "Un film récent ?",
+        "Un film d'animation pour enfants ?",
+        "Une tenue de soirée ?",
+        "Une tenue décontractée ?",
+        "Une tenue professionnelle ?",
+        "Une tenue de sport extrême ?",
+        "Une tenue traditionnelle européenne ?",
+        "Une tenue traditionnelle asiatique ?",
+        "Une tenue traditionnelle africaine ?",
+        "Un accessoire pour cheveux longs ?",
+        "Un accessoire pour cheveux courts ?",
+        "Une paire de lunettes ?",
+        "Un métier dans l'industrie ?",
+        "Un métier dans l'agriculture ?",
+        "Un métier dans l'artisanat ?",
+        "Un métier dans le commerce ?",
+        "Un métier dans la technologie ?",
+        "Une invention insolite ?",
+        "Une invention pour animaux ?",
+        "Un objet de science-fiction ?",
+        "Un objet d'aventure ?",
+        "Quelque chose qu'on utilise seulement en vacances ?",
+        "Un objet rouge ?",
+        "Un objet bleu ?",
+        "Un objet jaune ?",
+        "Un objet vert ?",
+        "Un objet noir ?",
+        "Un objet blanc ?",
+        "Un objet rond ?",
+        "Un objet carré ?",
+        "Un objet dans la cuisine ?",
+        "Un objet dans la salle de bain ?",
+        "Un objet dans le salon ?",
+        "Un objet dans la chambre ?",
+        "Un objet qu'on porte l'hiver ?",
+        "Un objet qu'on porte l'été ?",
+        "Un objet qui fait du bruit ?",
+        "Un objet électronique ?",
+        "Un objet en plastique ?",
+        "Un objet en métal ?",
+        "Un objet en bois ?",
+        "Un objet qu'on utilise tous les jours ?",
+        "Un animal rapide ?",
+        "Un animal lent ?",
+        "Un animal de compagnie ?",
+        "Un animal de la ferme ?",
+        "Un animal sauvage ?",
+        "Un animal marin ?",
+        "Un animal volant ?",
+        "Un animal qui vit dans la jungle ?",
+        "Un animal qui vit dans le désert ?",
+        "Un animal nocturne ?",
+        "Une fleur ?",
+        "Une plante verte ?",
+        "Un arbre ?",
+        "Un fruit d'arbre ?",
+        "Un légume ?",
+        "Une herbe aromatique ?",
+        "Un animal préhistorique ?",
+        "Un animal mythique ?",
+        "Un insecte ?",
+        "Un reptile ?",
+        "Un fruit ?",
+        "Une boisson ?",
+        "Un plat italien ?",
+        "Un plat français ?",
+        "Un plat asiatique ?",
+        "Un plat américain ?",
+        "Un plat sucré ?",
+        "Un plat salé ?",
+        "Un dessert ?",
+        "Un aliment qu'on mange au petit-déjeuner ?",
+        "Un aliment qu'on mange au déjeuner ?",
+        "Un aliment qu'on mange au dîner ?",
+        "Un aliment qu'on peut griller ?",
+        "Un aliment exotique ?",
+        "Un aliment de saison ?",
+        "Un produit laitier ?",
+        "Une céréale ?",
+        "Une sauce ?",
+        "Une épice ?",
+        "Un meuble ?",
+        "Un objet sur une table ?",
+        "Un objet sur une étagère ?",
+        "Un appareil électronique ?",
+        "Un outil de bricolage ?",
+        "Un objet décoratif ?",
+        "Un objet lumineux ?",
+        "Un objet qui se branche ?",
+        "Un objet qu'on utilise rarement ?",
+        "Un objet qui se range facilement ?",
+        "Un sport ?",
+        "Un sport d'équipe ?",
+        "Un sport individuel ?",
+        "Un jeu de société ?",
+        "Un jeu vidéo ?",
+        "Un instrument de musique ?",
+        "Un instrument à cordes ?",
+        "Un instrument à vent ?",
+        "Un instrument de percussion ?",
+        "Une activité de vacances ?",
+        "Une activité d'intérieur ?",
+        "Une activité d'extérieur ?",
+        "Un film célèbre ?",
+        "Une série célèbre ?",
+        "Un dessin animé ?",
+        "Un personnage de film ?",
+        "Un personnage de dessin animé ?",
+        "Un personnage de série ?",
+        "Un livre célèbre ?",
+        "Un conte ou légende ?",
+        "Un vêtement ?",
+        "Une chaussure ?",
+        "Un accessoire ?",
+        "Un chapeau ?",
+        "Un manteau ?",
+        "Une veste ?",
+        "Un pull ?",
+        "Un pantalon ?",
+        "Une jupe ?",
+        "Une robe ?",
+        "Un vêtement d'hiver ?",
+        "Un vêtement d'été ?",
+        "Un vêtement traditionnel ?",
+        "Un bijou ?",
+        "Une montre ?",
+        "Un sac ?",
+        "Une ceinture ?",
+        "Un vêtement pour le sport ?",
+        "Un vêtement de pluie ?",
+        "Un vêtement de nuit ?",
+        "Une couleur ?",
+        "Une partie du corps ?",
+        "Un métier ?",
+        "Une émotion ?",
+        "Un instrument de cuisine ?",
+        "Une invention célèbre ?",
+        "Une ville ?",
+        "Un pays ?",
+        "Une capitale ?",
+        "Un moyen de transport ?",
+        "Un véhicule motorisé ?",
+        "Un véhicule non motorisé ?",
+        "Un objet volant ?",
+        "Un objet flottant ?",
+        "Quelque chose de très lourd ?",
+        "Quelque chose de très léger ?",
+        "Une unité de mesure ?",
+        "Un outil ?",
+        "Un objet ancien ?",
+        "Un objet futuriste ?",
+        "Un aliment qu'on trouve au supermarché ?",
+        "Une boisson chaude ?",
+        "Une boisson froide ?",
+        "Un dessert glacé ?",
+        "Un fruit tropical ?",
+        "Un fruit rouge ?",
+        "Un légume vert ?",
+        "Un légume racine ?",
+        "Un fruit sec ?",
+        "Un fruit à coque ?",
+        "Un animal de compagnie inhabituel ?",
+        "Un animal de la savane ?",
+        "Un animal des montagnes ?",
+        "Un animal qui vit dans l'eau douce ?",
+        "Un animal en voie de disparition ?",
+        "Un animal de la préhistoire ?",
+        "Un animal de fiction ?",
+        "Un oiseau ?",
+        "Un poisson ?",
+        "Un mammifère ?",
+        "Un meuble pour s'asseoir ?",
+        "Un meuble pour ranger ?",
+        "Un meuble dans la chambre ?",
+        "Un meuble dans le salon ?",
+        "Un meuble dans la cuisine ?",
+        "Un objet décoratif sur une table ?",
+        "Une lampe ?",
+        "Un tableau ?",
+        "Un miroir ?",
+        "Un sport d'hiver ?",
+        "Un sport d'été ?",
+        "Un jeu de cartes ?",
+        "Un jeu de dés ?",
+        "Une activité créative ?",
+        "Une activité musicale ?",
+        "Une activité sportive ?",
+        "Un festival ou événement culturel ?",
+        "Un film d'animation ?",
+        "Une série animée ?",
+        "Un vêtement de sport ?",
+        "Un vêtement de fête ?",
+        "Une chaussure élégante ?",
+        "Un chapeau d'été ?",
+        "Un chapeau d'hiver ?",
+        "Un accessoire pour cheveux ?",
+        "Un sac à main ?",
+        "Un sac à dos ?",
+        "Une écharpe ?",
+        "Un métier dans la santé ?",
+        "Un métier artistique ?",
+        "Un métier scientifique ?",
+        "Un métier technique ?",
+        "Un métier ancien ou historique ?",
+        "Une invention récente ?",
+        "Une invention ancienne ?",
+        "Un objet magique ?",
+        "Un objet du quotidien qui surprend ?",
+        "Quelque chose que personne n'attendrait sur une table ?",
+      ];
+
+      // ---------- Réglages ----------
+      const QUESTIONS_PER_GAME = 3;   // nombre de questions par partie
+      const QUESTION_TIME = 22;       // secondes pour répondre
+      const COLLECT_GRACE = 2500;     // ms d'attente après le temps écoulé
+      const RESULT_TIME = 4800;       // ms d'affichage du résultat d'une question
+      const PTS_PER_MATCH = 100;      // points par joueur partageant ta réponse
+      const PERFECT_BONUS = 100;      // bonus si TOUT le monde est synchro
+
+      const AVATAR_COLORS = ['#f87171','#60a5fa','#4ade80','#fbbf24','#c084fc','#fb923c','#34d399','#f472b6'];
+
+      // ---------- Paramètres URL ----------
+      const params = new URLSearchParams(location.search);
+      const roomCode = params.get('room');
+      const myId = params.get('pid') || (() => { try { return localStorage.getItem('emarcade-pid'); } catch { return null; } })();
+      const isMP = !!(roomCode && myId);
+
+      // ============================================================
+      //  SOLO (ouvert directement, hors partie)
+      // ============================================================
+      if (!isMP) {
+        hideOv($('mp-wait-overlay'));
+        showOv($('solo-overlay'));
+        return;
+      }
+
+      // ============================================================
+      //  MULTIJOUEUR
+      // ============================================================
+      let ws = null;
+      let players = [];               // [{id,name}]
+      let mpTotal = 0;
+      let qs = [];                    // indices des questions de la partie
+      let curQ = -1;                  // question en cours (0..QUESTIONS_PER_GAME-1)
+      let started = false;
+      let myTotal = 0;                // score accumulé sur la partie
+
+      // answers[round] = { playerId: { raw, norm } }
+      const answers = {};
+      let submitted = false;
+      let countdownId = null;
+      let forceTimer = null;
+      let hardTimer = null;
+      let resolved = false;
+
+      function mpSend(payload) {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+      }
+
+      // ---------- Normalisation des réponses ----------
+      function normalize(w) {
+        return (w || '')
+          .toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g, '')  // enlève les accents
+          .replace(/[^a-z0-9]/g, '')                         // garde lettres/chiffres
+          .replace(/s$/, '');                                // singulier/pluriel indulgent
+      }
+      function firstWord(s) {
+        return (s || '').trim().split(/\s+/)[0] || '';
+      }
+
+      // ---------- Bande joueurs ----------
+      function avatarLetter(name) { return (name || '?').trim().charAt(0).toUpperCase() || '?'; }
+      function renderPlayersBar() {
+        const bar = $('players-bar');
+        bar.classList.remove('hidden');
+        bar.innerHTML = '';
+        players.forEach((p, i) => {
+          const chip = document.createElement('div');
+          chip.className = 'player-chip';
+          chip.dataset.pid = p.id;
+          chip.innerHTML = `
+            <div class="player-avatar" style="background:${AVATAR_COLORS[i % AVATAR_COLORS.length]}33;border-color:${AVATAR_COLORS[i % AVATAR_COLORS.length]}">${avatarLetter(p.name)}</div>
+            <div class="player-pname">${escapeHtml(p.name)}${p.id === myId ? ' (toi)' : ''}</div>`;
+          bar.appendChild(chip);
+        });
+      }
+      function markDone(pid) {
+        const chip = $('players-bar').querySelector(`.player-chip[data-pid="${CSS.escape(pid)}"]`);
+        if (chip) chip.classList.add('done');
+      }
+      function clearDots() {
+        $('players-bar').querySelectorAll('.player-chip').forEach(c => c.classList.remove('done'));
+      }
+
+      // ---------- Démarrage de la partie ----------
+      function buildQuestionSet() {
+        const idx = QUESTIONS.map((_, i) => i);
+        for (let i = idx.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [idx[i], idx[j]] = [idx[j], idx[i]];
+        }
+        return idx.slice(0, Math.min(QUESTIONS_PER_GAME, idx.length));
+      }
+
+      let leadFallback = null;
+      function startGame(questionSet) {
+        if (started) return;
+        started = true;
+        clearTimeout(leadFallback); leadFallback = null;
+        qs = questionSet;
+        $('q-total').textContent = qs.length;
+        hideOv($('mp-wait-overlay'));
+        show($('play'));
+        curQ = -1;
+        nextQuestion();
+      }
+
+      // Élection du « meneur » (id le plus petit) qui tire les questions et les
+      // diffuse. Le meneur démarre tout de suite ; les autres se mettent en
+      // secours échelonné au cas où le meneur disparaîtrait avant de diffuser.
+      function lead() {
+        if (started) return;
+        const set = buildQuestionSet();
+        mpSend({ type: 'relay', data: { type: 'syn-init', qs: set } });
+        startGame(set);
+      }
+      function maybeLead() {
+        if (started || mpTotal === 0) return;
+        const ids = players.map(p => p.id).sort();
+        const myRank = ids.indexOf(myId);
+        if (myRank === 0) {
+          lead();
+        } else if (!leadFallback) {
+          leadFallback = setTimeout(() => { if (!started) lead(); }, myRank * 2500);
+        }
+      }
+
+      // ---------- Déroulé d'une question ----------
+      function nextQuestion() {
+        curQ++;
+        if (curQ >= qs.length) { finishGame(); return; }
+
+        resolved = false;
+        submitted = false;
+        clearTimeout(forceTimer); forceTimer = null;
+        // Échéance ferme : la question se résout au plus tard ici, même si un
+        // joueur s'est déconnecté sans répondre (sinon attente infinie).
+        clearTimeout(hardTimer);
+        hardTimer = setTimeout(() => resolveQuestion(), QUESTION_TIME * 1000 + COLLECT_GRACE);
+
+        const qIndex = qs[curQ];
+        $('q-cur').textContent = curQ + 1;
+        $('q-text').textContent = QUESTIONS[qIndex];
+        clearDots();
+
+        // UI saisie
+        const inp = $('answer-input');
+        inp.value = '';
+        inp.disabled = false;
+        $('answer-submit').disabled = false;
+        $('answer-form').classList.remove('hidden');
+        $('locked').classList.remove('show');
+        hideOv($('round-result-overlay'));
+        setTimeout(() => { try { inp.focus(); } catch {} }, 50);
+
+        // Réponses déjà reçues en avance (buffer) → marquer les pastilles
+        if (answers[curQ]) {
+          Object.keys(answers[curQ]).forEach(markDone);
+          checkAllIn();
+        }
+
+        startTimer();
+      }
+
+      function startTimer() {
+        clearInterval(countdownId);
+        let remaining = QUESTION_TIME;
+        const bar = $('timer-bar');
+        bar.style.transition = 'none';
+        bar.style.width = '100%';
+        bar.style.background = '#4ade80';
+        // forcer un reflow avant de réactiver la transition
+        void bar.offsetWidth;
+        bar.style.transition = 'width 1s linear, background 0.4s ease';
+
+        const tick = () => {
+          remaining--;
+          const frac = Math.max(0, remaining / QUESTION_TIME);
+          bar.style.width = (frac * 100) + '%';
+          bar.style.background = frac > 0.5 ? '#4ade80' : frac > 0.25 ? '#fbbf24' : '#f87171';
+          if (remaining <= 0) {
+            clearInterval(countdownId);
+            onTimeUp();
+          }
+        };
+        countdownId = setInterval(tick, 1000);
+      }
+
+      function onTimeUp() {
+        if (!submitted) lockAnswer($('answer-input').value);
+        clearTimeout(forceTimer);
+        forceTimer = setTimeout(() => resolveQuestion(), COLLECT_GRACE);
+      }
+
+      // ---------- Soumission ----------
+      function lockAnswer(rawValue) {
+        if (submitted) return;
+        submitted = true;
+        clearInterval(countdownId);
+
+        const raw = firstWord(rawValue);
+        const norm = normalize(raw);
+        if (!answers[curQ]) answers[curQ] = {};
+        answers[curQ][myId] = { raw, norm };
+
+        // UI verrouillée
+        $('answer-form').classList.add('hidden');
+        $('lock-word').textContent = raw || '— (pas de réponse) —';
+        $('locked').classList.add('show');
+        markDone(myId);
+
+        mpSend({ type: 'relay', data: { type: 'syn-ans', q: curQ, raw, norm } });
+        checkAllIn();
+      }
+
+      $('answer-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        lockAnswer($('answer-input').value);
+      });
+      // Force un seul mot : on retire les espaces à la saisie.
+      $('answer-input').addEventListener('input', (e) => {
+        e.target.value = e.target.value.replace(/\s+/g, '');
+      });
+
+      // ---------- Résolution d'une question ----------
+      function checkAllIn() {
+        if (resolved || !started) return;
+        const got = answers[curQ] ? Object.keys(answers[curQ]).length : 0;
+        if (got >= mpTotal) resolveQuestion();
+      }
+
+      function resolveQuestion() {
+        if (resolved) return;
+        resolved = true;
+        clearInterval(countdownId);
+        clearTimeout(forceTimer); forceTimer = null;
+        clearTimeout(hardTimer); hardTimer = null;
+
+        const map = answers[curQ] || {};
+        // Compte des réponses normalisées (hors réponses vides)
+        const counts = {};
+        for (const pid of Object.keys(map)) {
+          const n = map[pid].norm;
+          if (n) counts[n] = (counts[n] || 0) + 1;
+        }
+
+        // Points pour moi
+        const myAns = map[myId];
+        let myPts = 0;
+        if (myAns && myAns.norm) {
+          const k = counts[myAns.norm] || 1;
+          myPts = (k - 1) * PTS_PER_MATCH;
+          if (k >= 2 && k === mpTotal) myPts += PERFECT_BONUS;
+        }
+        myTotal += myPts;
+
+        showRoundResult(map, counts, myPts);
+
+        setTimeout(() => {
+          hideOv($('round-result-overlay'));
+          nextQuestion();
+        }, RESULT_TIME);
+      }
+
+      function showRoundResult(map, counts, myPts) {
+        $('rr-question').textContent = QUESTIONS[qs[curQ]];
+
+        // Regrouper par réponse normalisée
+        const groups = {}; // norm -> { word, names[], count }
+        players.forEach(p => {
+          const a = map[p.id];
+          const norm = a ? a.norm : '';
+          const key = norm || '∅' + p.id; // les vides restent séparés
+          if (!groups[key]) groups[key] = { word: a && a.raw ? a.raw : '—', names: [], count: norm ? (counts[norm] || 0) : 0, empty: !norm };
+          groups[key].names.push(p.name + (p.id === myId ? ' (toi)' : ''));
+        });
+
+        const ordered = Object.values(groups).sort((a, b) => b.count - a.count);
+        const wrap = $('rr-groups');
+        wrap.innerHTML = '';
+        ordered.forEach(g => {
+          const div = document.createElement('div');
+          div.className = 'ans-group' + (g.count >= 2 ? ' match' : '');
+          div.innerHTML = `
+            <span class="ag-word">${escapeHtml(g.word)}</span>
+            <span class="ag-who">${escapeHtml(g.names.join(', '))}</span>
+            <span class="ag-count">×${g.empty ? 0 : g.count}</span>`;
+          wrap.appendChild(div);
+        });
+
+        $('rr-points').textContent = myPts > 0 ? `+${myPts} pts ✨` : 'Aucune correspondance 😬';
+        showOv($('round-result-overlay'));
+
+        const els = wrap.querySelectorAll('.ans-group');
+        els.forEach((el, i) => setTimeout(() => el.classList.add('visible'), 200 + i * 250));
+      }
+
+      // ---------- Fin de partie ----------
+      function finishGame() {
+        $('players-bar').classList.add('hidden');
+        $('play').classList.remove('show');
+        mpSend({ type: 'game-score', score: myTotal });
+        $('reveal-continue-btn').classList.add('hidden');
+        // L'attente / le classement final arrivent via 'round-complete'.
+        showOv($('score-reveal-overlay'));
+        $('reveal-list').innerHTML = `<p style="text-align:center;opacity:0.8">En attente des autres joueurs…</p>`;
+      }
+
+      const MEDALS = ['🥇', '🥈', '🥉'];
+      function showFinalRanking(msg) {
+        const scores = msg.roundScores || {};
+        const plist = (players.length ? players : (msg.players || []));
+        const sorted = [...plist].sort((a, b) => (scores[a.id] ?? 0) - (scores[b.id] ?? 0));
+        const total = sorted.length;
+
+        const list = $('reveal-list');
+        list.innerHTML = '';
+        sorted.forEach((p, fromWorst) => {
+          const rankFromBest = total - 1 - fromWorst;
+          const entry = document.createElement('div');
+          entry.className = 'rp-entry' + (rankFromBest === 0 ? ' winner' : '');
+          entry.innerHTML = `
+            <span class="rp-rank">${MEDALS[rankFromBest] ?? (rankFromBest + 1) + '.'}</span>
+            <span class="rp-name">${escapeHtml(p.name)}${p.id === myId ? ' (toi)' : ''}</span>
+            <span class="rp-score">${scores[p.id] ?? 0} pts</span>`;
+          list.appendChild(entry);
+        });
+
+        const entries = list.querySelectorAll('.rp-entry');
+        entries.forEach((entry, i) => {
+          setTimeout(() => {
+            entry.classList.add('visible');
+            if (i === entries.length - 1) setTimeout(() => $('reveal-continue-btn').classList.remove('hidden'), 700);
+          }, 500 + i * 850);
+        });
+        $('reveal-continue-btn').textContent = msg.hasMore ? 'Manche suivante →' : 'Retour au lobby →';
+      }
+
+      $('reveal-continue-btn').addEventListener('click', () => {
+        location.href = `/?room=${encodeURIComponent(roomCode)}&pid=${encodeURIComponent(myId)}`;
+      });
+
+      // ---------- Réseau ----------
+      function mpHandle(msg) {
+        switch (msg.type) {
+          case 'game-connected':
+            if (msg.players) { players = msg.players; mpTotal = players.length; renderPlayersBar(); }
+            $('mp-wait-msg').textContent = `${msg.connectedCount} / ${msg.total} joueurs prêts…`;
+            if (msg.connectedCount >= mpTotal && mpTotal > 0) maybeLead();
+            break;
+
+          case 'player-reconnected':
+            $('mp-wait-msg').textContent = `${msg.connectedCount} / ${mpTotal} joueurs prêts…`;
+            if (msg.connectedCount >= mpTotal && mpTotal > 0) maybeLead();
+            break;
+
+          case 'relay': {
+            const d = msg.data || {};
+            if (d.type === 'syn-init') {
+              startGame(d.qs);
+            } else if (d.type === 'syn-ans') {
+              if (!answers[d.q]) answers[d.q] = {};
+              answers[d.q][msg.from] = { raw: d.raw, norm: d.norm };
+              if (d.q === curQ) { markDone(msg.from); checkAllIn(); }
+            }
+            break;
+          }
+
+          case 'round-complete':
+            showFinalRanking(msg);
+            break;
+        }
+      }
+
+      function mpConnect() {
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        ws = new WebSocket(`${proto}://${location.host}/ws`);
+        ws.addEventListener('open', () => {
+          ws.send(JSON.stringify({ type: 'game-connect', code: roomCode, playerId: myId }));
+        });
+        ws.addEventListener('message', (e) => {
+          let m; try { m = JSON.parse(e.data); } catch { return; }
+          mpHandle(m);
+        });
+        ws.addEventListener('error', () => { $('mp-wait-msg').textContent = 'Erreur de connexion au serveur.'; });
+      }
+
+      // ---------- Init ----------
+      $('mp-wait-msg').textContent = 'Connexion en cours…';
+      mpConnect();
+    })();
+    </script>
+  </body>
+</html>

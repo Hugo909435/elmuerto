@@ -38,7 +38,10 @@ const els = {
   mpWaitOverlay:       $('mp-wait-overlay'),
   mpWaitMsg:           $('mp-wait-msg'),
   scoreRevealOverlay:  $('score-reveal-overlay'),
+  revealTitle:         $('reveal-title'),
   revealList:          $('reveal-list'),
+  revealGlobal:        $('reveal-global'),
+  revealGlobalList:    $('reveal-global-list'),
   revealContinueBtn:   $('reveal-continue-btn'),
   // Solo
   resultOverlay: $('result-overlay'),
@@ -235,6 +238,7 @@ let mpReadySet       = new Set();   // pids qui ont cliqué Prêt
 let mpPlayers        = [];
 let mpDoneThisRound  = new Set();
 let mpCaptured       = false;
+let mpRoundWatchdog  = null;
 
 function mpSend(payload) {
   if (mpWs && mpWs.readyState === WebSocket.OPEN) mpWs.send(JSON.stringify(payload));
@@ -415,7 +419,19 @@ async function mpStartInternalRound(idx) {
     els.shutter.disabled = false;
 
     if (!rafId) liveLoop();
-    startTimer(() => mpDoCapture());
+    startTimer(() => {
+      mpDoCapture();
+      // Si certains joueurs n'ont toujours pas répondu 6s après la fin du chrono, on force l'avancement
+      mpRoundWatchdog = setTimeout(() => {
+        mpPlayers.forEach(p => {
+          if (!mpDoneThisRound.has(p.id)) {
+            mpRoundScoresAll[p.id] = mpRoundScoresAll[p.id] ?? 0;
+            mpDoneThisRound.add(p.id);
+          }
+        });
+        mpCheckAllDone();
+      }, 3000);
+    });
   });
 }
 
@@ -449,6 +465,7 @@ function mpCheckAllDone() {
   els.mpCapturedMsg.textContent = `📷 Photo prise — attente ${mpDoneThisRound.size}/${mpPlayers.length}`;
   if (mpDoneThisRound.size < mpPlayers.length) return;
 
+  if (mpRoundWatchdog) { clearTimeout(mpRoundWatchdog); mpRoundWatchdog = null; }
   mpDoneThisRound = new Set();
   stopTimer();
   hide(els.mpCapturedBar);
@@ -480,9 +497,14 @@ function mpShowScoreReveal(msg) {
   hide(els.playersBar);
   hide(els.hud);
 
-  const scores     = msg.roundScores || {};
-  const breakdowns = msg.roundBreakdowns || {};
-  const players    = mpPlayers.length ? mpPlayers : (msg.players || []);
+  const scores      = msg.roundScores || {};
+  const totalScores = msg.totalScores || {};
+  const breakdowns  = msg.roundBreakdowns || {};
+  const players     = mpPlayers.length ? mpPlayers : (msg.players || []);
+
+  if (msg.round && msg.totalRounds) {
+    els.revealTitle.textContent = `🏆 Manche ${msg.round} / ${msg.totalRounds}`;
+  }
 
   // Tri décroissant : 1er en haut
   const sorted = [...players].sort((a, b) => (scores[b.id] ?? 0) - (scores[a.id] ?? 0));
@@ -514,6 +536,27 @@ function mpShowScoreReveal(msg) {
     `;
     els.revealList.appendChild(entry);
   });
+
+  // Classement global (totalScores)
+  const hasTotal = Object.keys(totalScores).length > 0;
+  if (hasTotal) {
+    const sortedTotal = [...players].sort((a, b) => (totalScores[b.id] ?? 0) - (totalScores[a.id] ?? 0));
+    els.revealGlobalList.innerHTML = '';
+    sortedTotal.forEach((p, i) => {
+      const isMe = p.id === mpPlayerId;
+      const entry = document.createElement('div');
+      entry.className = 'rg-entry';
+      entry.innerHTML = `
+        <span class="rg-rank">${MEDALS[i] ?? (i + 1) + '.'}</span>
+        <span class="rg-name">${escapeHtml(p.name)}${isMe ? ' <span class="rp-me">(toi)</span>' : ''}</span>
+        <span class="rg-score">${totalScores[p.id] ?? 0} pts</span>
+      `;
+      els.revealGlobalList.appendChild(entry);
+    });
+    show(els.revealGlobal);
+  } else {
+    hide(els.revealGlobal);
+  }
 
   hide(els.revealContinueBtn);
   show(els.scoreRevealOverlay);

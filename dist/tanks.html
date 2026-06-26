@@ -125,7 +125,7 @@
     <div id="mp-overlay" class="overlay hidden">
       <h1>💥 Tanks du salon</h1>
       <p>Pilote ton char avec le joystick et tire avec le bouton. Détruis les adversaires tout en évitant leurs obus. Le dernier char en vie gagne&nbsp;!</p>
-      <div class="score-note" style="margin-bottom:4px">🏆 <b>Score :</b> placement (1er = 100pts, 2e = 60pts, 3e = 35pts…) + 25pts par kill</div>
+      <div class="score-note" style="margin-bottom:4px">🏆 <b>Score :</b> le dernier char en vie gagne. En cas d'égalité sur les vies restantes, celui avec le plus de kills l'emporte.</div>
       <p id="mp-sub">Connexion à la salle d'attente…</p>
       <ul id="mp-players"></ul>
       <button id="mp-start" class="btn hidden">Lancer la bataille 💥</button>
@@ -136,7 +136,7 @@
     <div id="start-overlay" class="overlay hidden">
       <h1>💥 EL MUERTO TANKS</h1>
       <p>Ton char tourne tout seul sur lui-même.<br /><b>Tape</b> l'écran pour <b>tirer</b> (ça inverse le sens de rotation).<br /><b>Maintiens</b> pour <b>foncer tout droit</b>. Dernier survivant gagne&nbsp;!</p>
-      <div class="score-note">🏆 <b>Score :</b> placement (1er = 100pts, 2e = 60pts, 3e = 35pts…) + 25pts par kill !</div>
+      <div class="score-note">🏆 <b>Victoire :</b> le dernier char en vie gagne. En cas d'égalité sur les vies restantes, le joueur avec le plus de kills l'emporte !</div>
       <button id="start-btn" class="btn">Je suis prêt&nbsp;!</button>
     </div>
 
@@ -188,8 +188,6 @@
       const LIVES = 3;
       const RESPAWN_DELAY = 1.4;    // s avant réapparition
       const INVULN_TIME = 1.8;      // s d'invincibilité après respawn
-      const PLACE_PTS = [100, 60, 35, 15, 5, 0, 0, 0]; // 1er → dernier
-      const KILL_PTS = 25;
 
       // ---- Zone de jeu rétrécissante (façon battle royale) ----
       // La carte de départ s'adapte au nombre de joueurs (2 → petite, 8 → pleine
@@ -222,7 +220,6 @@
       let state = 'boot';            // boot | mpwait | countdown | playing | ended
       const tanks = new Map();       // id -> tank (inclut le mien)
       let me = null;
-      let eliminationOrder = [];     // ids dans l'ordre d'élimination (1er éliminé = index 0)
       const bullets = [];            // balles réelles (les miennes / solo)
       const ghostBullets = [];       // balles cosmétiques reçues des pairs
       const particles = [];
@@ -454,7 +451,6 @@
         t.lives -= 1;
         t.alive = false;
         t.respawn = RESPAWN_DELAY;
-        if (t.lives <= 0 && !eliminationOrder.includes(t.id)) eliminationOrder.push(t.id);
         spawnExplosion(t.x, t.y, t.color);
         renderHud();
         if (t.isMe) {
@@ -572,7 +568,6 @@
       function outOfZoneDamage(t) {
         if (!t.alive || t.invuln > 0) return;
         t.lives -= 1; t.alive = false; t.respawn = RESPAWN_DELAY;
-        if (t.lives <= 0 && !eliminationOrder.includes(t.id)) eliminationOrder.push(t.id);
         spawnExplosion(t.x, t.y, '#ff2d2d');
         renderHud();
         if (t.isMe) showToast(t.lives > 0 ? '🔥 Hors zone !' : '☠️ Avalé par la zone',
@@ -832,41 +827,16 @@
         const ovl = $('end-overlay');
         const iWon = winner && (winner.isMe);
         $('end-title').textContent = winner ? (iWon ? '🏆 Victoire !' : `${escapeHtml(winner.name)} gagne`) : 'Égalité';
-        $('end-sub').textContent = winner ? 'Dernier char debout' : '';
-
-        // Compléter l'ordre d'élimination avec le gagnant (dernier vivant)
-        if (winner && !eliminationOrder.includes(winner.id)) eliminationOrder.push(winner.id);
-        for (const t of tanks.values()) {
-          if (!eliminationOrder.includes(t.id)) eliminationOrder.unshift(t.id);
-        }
-        const n = tanks.size;
-        // ranked : gagnant en premier (dernier dans eliminationOrder = index 0 du reversed)
-        const ranked = [...eliminationOrder].reverse().map(id => tanks.get(id)).filter(Boolean);
-
-        $('end-list').innerHTML = ranked.map((t, i) => {
-          const placePts = PLACE_PTS[i] || 0;
-          const kills = t.kills || 0;
-          const total = placePts + kills * KILL_PTS;
-          return `<div class="end-row"><span class="rk">${['🥇','🥈','🥉'][i] || (i + 1) + '.'}</span>` +
-            `<span class="nm" style="color:${t.color}">${escapeHtml(t.name)}${t.isMe ? ' (toi)' : ''}</span>` +
-            `<span class="kd">${kills} kill${kills !== 1 ? 's' : ''} · <b>${total}pts</b></span></div>`;
-        }).join('');
+        $('end-sub').textContent = winner ? `Dernier char debout` : '';
+        const ranked = [...tanks.values()].sort((a, b) => (b.lives - a.lives) || (b.kills || 0) - (a.kills || 0));
+        $('end-list').innerHTML = ranked.map((t, i) =>
+          `<div class="end-row"><span class="rk">${['🥇','🥈','🥉'][i] || (i + 1) + '.'}</span>` +
+          `<span class="nm" style="color:${t.color}">${escapeHtml(t.name)}${t.isMe ? ' (toi)' : ''}</span>` +
+          `<span class="kd">${t.kills || 0} kill${(t.kills || 0) > 1 ? 's' : ''}</span></div>`
+        ).join('');
         ovl.classList.remove('hidden');
 
-        if (MP && ROOM) {
-          // Calcul du score et envoi au tournoi
-          const myIdx = eliminationOrder.indexOf(me ? me.id : myId);
-          const myRankFromTop = n - 1 - myIdx;
-          const placePts = myIdx >= 0 ? (PLACE_PTS[myRankFromTop] || 0) : 0;
-          const myScore = placePts + (me ? (me.kills || 0) : 0) * KILL_PTS;
-          net && net.send({ type: 'game-score', score: myScore });
-          $('rematch-btn').classList.add('hidden');
-          $('rematch-wait').classList.remove('hidden');
-          $('rematch-wait').textContent = `Score : ${myScore} pts — retour au lobby…`;
-          setTimeout(() => {
-            window.location.href = `/?room=${encodeURIComponent(ROOM)}&pid=${encodeURIComponent(MY_PID)}&name=${encodeURIComponent(MY_NAME)}`;
-          }, 3500);
-        } else if (MP) {
+        if (MP) {
           $('rematch-btn').classList.toggle('hidden', !isHost);
           $('rematch-wait').classList.toggle('hidden', isHost);
         } else {
@@ -881,7 +851,6 @@
       function startSolo() {
         MP = false; myId = 'me';
         tanks.clear(); bullets.length = 0; ghostBullets.length = 0; particles.length = 0;
-        eliminationOrder = [];
         me = makeTank('me', 0, MY_NAME, true, false);
         tanks.set('me', me);
         for (let i = 1; i <= 3; i++) {
@@ -970,7 +939,6 @@
       // Top départ : on (re)crée tous les chars à partir de la liste du serveur.
       function onMatchStart(m) {
         tanks.clear(); bullets.length = 0; ghostBullets.length = 0; particles.length = 0;
-        eliminationOrder = [];
         const sorted = [...m.players].sort((a, b) => a.slot - b.slot);
         for (const e of sorted) {
           const t = makeTank(e.id, e.slot, e.name, e.id === myId, false);
@@ -989,10 +957,7 @@
         t.tx = s[0]; t.ty = s[1]; t.tangle = s[2];
         const wasAlive = t.alive;
         t.lives = s[3]; t.alive = !!s[4]; t.invuln = s[5] ? Math.max(t.invuln, 0.1) : 0;
-        if (wasAlive && !t.alive) {
-          spawnExplosion(t.x, t.y, t.color);
-          if (t.lives <= 0 && !eliminationOrder.includes(id)) eliminationOrder.push(id);
-        }
+        if (wasAlive && !t.alive) spawnExplosion(t.x, t.y, t.color);
         renderHud();
       }
 

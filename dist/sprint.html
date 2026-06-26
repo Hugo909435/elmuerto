@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Chicken Run — El Muerto Arcade</title>
+    <title>Sprint — El Muerto Arcade</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body {
@@ -15,7 +15,7 @@
       }
       #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
-      /* tape sur tout l'écran pour changer de côté */
+      /* tape sur tout l'écran pendant la course */
       #tap-zone {
         position: fixed; inset: 0; z-index: 5;
         display: none;
@@ -37,7 +37,7 @@
         padding: 8px 18px; font-size: 16px; font-weight: 800;
         display: flex; align-items: center; gap: 10px;
       }
-      .hud-pill .small { font-size: 12px; font-weight: 600; opacity: 0.75; }
+      .hud-pill .small { font-size: 12px; font-weight: 600; opacity: 0.7; }
 
       /* indicateur de tape au centre */
       #tap-hint {
@@ -48,7 +48,7 @@
       }
       #tap-hint.hidden { display: none; }
       #tap-hint .big {
-        font-size: clamp(24px, 8vw, 42px); font-weight: 900;
+        font-size: clamp(26px, 9vw, 46px); font-weight: 900;
         letter-spacing: 1px; color: #fde047;
         text-shadow: 0 4px 18px rgba(0,0,0,0.5);
         animation: pulse 0.7s ease-in-out infinite;
@@ -156,15 +156,15 @@
     <div id="hud">
       <div class="hud-pill">
         <span id="hud-pos">0 m</span>
-        <span class="small">/ <span id="hud-len">100</span> m</span>
+        <span class="small">/ <span id="hud-len">150</span> m</span>
         <span class="small" id="hud-time">0.0 s</span>
       </div>
     </div>
 
     <!-- Indicateur tape -->
     <div id="tap-hint" class="hidden">
-      <div class="big">TAPE pour changer de côté</div>
-      <div class="sub">Change de côté pour passer les murs… sinon tu te cognes&nbsp;!</div>
+      <div class="big">TAPE&nbsp;!</div>
+      <div class="sub">Plus tu tapes vite, plus tu cours vite</div>
     </div>
 
     <!-- Compte à rebours -->
@@ -172,9 +172,9 @@
 
     <!-- Solo: départ -->
     <div id="start-overlay" class="overlay">
-      <h1>🐔 Chicken Run</h1>
-      <p>Ton poulet court tout seul. Tape l'écran pour le faire passer du sol au plafond&nbsp;: les murs sont solides, il faut être du bon côté pour passer, sinon tu te cognes et tu t'arrêtes. À chaque obstacle touché, tu ralentis. Premier à la ligne d'arrivée gagne&nbsp;!</p>
-      <div class="score-note">🏆 <b>Score :</b> jusqu'à 1000 pts. Arrive en 7 s ou moins pour le maximum — chaque seconde supplémentaire retire 60 pts (minimum 100 pts). Évite les obstacles !</div>
+      <h1>🏃 Sprint</h1>
+      <p>Tape l'écran le plus vite possible pour faire courir ton bonhomme jusqu'à la ligne d'arrivée. Le plus rapide gagne&nbsp;!</p>
+      <div class="score-note">🏆 <b>Score :</b> jusqu'à 1000 pts. Arrive en 25 s ou moins pour le maximum — chaque seconde supplémentaire retire 30 pts (minimum 100 pts).</div>
       <button id="start-btn" class="btn">Je suis prêt&nbsp;!</button>
     </div>
 
@@ -188,7 +188,7 @@
 
     <!-- MP: attente connexion -->
     <div id="mp-wait-overlay" class="overlay hidden">
-      <div style="font-size:52px">🐔</div>
+      <div style="font-size:52px">🏟️</div>
       <h1>Sur la ligne…</h1>
       <p id="mp-wait-msg">Connexion…</p>
     </div>
@@ -197,7 +197,7 @@
     <div id="mp-done-overlay" class="overlay hidden">
       <div style="font-size:52px">🏁</div>
       <h1 id="mp-done-time">0.0 s</h1>
-      <p id="mp-done-msg">En attente des autres poulets…</p>
+      <p id="mp-done-msg">En attente des autres coureurs…</p>
     </div>
 
     <!-- MP: classement -->
@@ -209,9 +209,9 @@
 
     <!-- MP: règles + prêt -->
     <div id="mp-rules-overlay" class="overlay hidden">
-      <h1>🐔 Chicken Run</h1>
-      <p>Ton poulet court tout seul. Tape l'écran pour passer du sol au plafond et éviter les obstacles. Le plus rapide gagne&nbsp;!</p>
-      <div class="score-note">🏆 <b>Score :</b> jusqu'à 1000 pts. Arrive en 7 s ou moins pour le maximum — chaque seconde supplémentaire retire 60 pts (minimum 100 pts).</div>
+      <h1>🏃 Sprint</h1>
+      <p>Tape l'écran le plus vite possible pour faire courir ton bonhomme jusqu'à la ligne d'arrivée. Le plus rapide gagne&nbsp;!</p>
+      <div class="score-note">🏆 <b>Score :</b> jusqu'à 1000 pts. Arrive en 25 s ou moins pour le maximum — chaque seconde supplémentaire retire 30 pts (minimum 100 pts).</div>
       <div id="mp-ready-list"></div>
       <button id="mp-ready-btn" class="btn">Je suis prêt&nbsp;!</button>
     </div>
@@ -225,49 +225,11 @@
         ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
       // ---------- Réglages du jeu ----------
-      // Course : le poulet avance tout seul. SOL (lane 0) ou PLAFOND (lane 1).
-      // Taper bascule de côté. Un obstacle est au sol OU au plafond : si le
-      // poulet est du même côté quand il passe, il ralentit. 1er arrivé gagne.
-      const TRACK_LEN   = 1820;   // longueur de la piste (unités/"mètres") — parcours TRÈS long
-      const BASE0       = 20;     // vitesse de croisière de départ (u/s) -> déjà rapide tôt
-      const BASE_RAMP   = 0.035;  // gain de vitesse par mètre parcouru -> de + en + vite
-      const SPEED_MAX   = 62;     // vitesse de croisière max (atteinte vers 1200 m, puis maintenue)
-      const RECOVER     = 3.2;    // ré-accélération après s'être cogné à un mur (/s)
-      const MAX_TIME    = 90;     // s — sécurité
-      const FIRST_OBST  = 14;     // distance avant le 1er obstacle (unités)
-      const GAP_MIN     = 11;     // écart mini entre obstacles (unités)
-      const GAP_VAR     = 9;      // variation aléatoire (unités)
-      const OBST_HALF_W = 1.3;    // demi-largeur de collision = largeur du rectangle (unités)
-      const FIXED_SEED  = 0x9e3779b1; // graine FIXE -> obstacles identiques pour tous (MP)
-      const SCALE       = 17;     // pixels par unité de monde
-      const CHICK_X     = 86;     // position horizontale fixe du poulet (px)
-
-      const LANE_COLORS = ['#fbbf24','#60a5fa','#4ade80','#f87171','#c084fc','#fb923c','#34d399','#f472b6'];
-
-      // ---------- Générateur déterministe (LCG) ----------
-      function makeRng(seed) {
-        let s = seed >>> 0;
-        return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
-      }
-
-      // Obstacles : positions-monde + côté (0=sol, 1=plafond).
-      // En solo -> graine aléatoire à chaque course. En MP -> graine fixe (identique pour tous).
-      let obstacles = [];
-      let obstacleSeed = FIXED_SEED;
-      function generateObstacles() {
-        const rng = makeRng(obstacleSeed);
-        obstacles = [];
-        let p = FIRST_OBST;
-        let lastLane = -1;
-        while (p < TRACK_LEN - 4) {
-          // éviter 3 obstacles d'affilée du même côté (plus lisible)
-          let lane = rng() < 0.5 ? 0 : 1;
-          if (lane === lastLane && rng() < 0.5) lane = 1 - lane;
-          lastLane = lane;
-          obstacles.push({ pos: p, lane });
-          p += GAP_MIN + rng() * GAP_VAR;
-        }
-      }
+      const TRACK_LEN   = 150;    // longueur de la piste en "mètres"
+      const TAP_IMPULSE = 3.0;    // m/s ajoutés par tape
+      const DRAG        = 4.0;    // décélération (par seconde, proportionnelle à la vitesse)
+      const MAX_TIME    = 60;     // s — au-delà, on termine d'office
+      const LANE_COLORS = ['#f87171','#60a5fa','#4ade80','#fbbf24','#c084fc','#fb923c','#34d399','#f472b6'];
 
       // ---------- Canvas ----------
       const canvas = $('game');
@@ -290,168 +252,139 @@
       const myName = params.get('name') || 'Toi';
       const isMP = !!(roomCode && myId);
 
-      // ---------- État des poules ----------
-      // runner: { id, name, color, pos, speed, lane(0/1), vis(0..1 anim), finished, time, nextObst, hitFlash }
+      // ---------- État des coureurs ----------
+      // runner: { id, name, color, pos (m), speed (m/s), step (anim), finished, time }
       let runners = [];
       let me = null;
-      let gameState = 'idle';   // idle | countdown | running | done
-      let startAt = 0;
+      let raceState = 'idle';   // idle | countdown | running | done
+      let raceStartAt = 0;
 
       function makeRunner(id, name, color) {
-        return { id, name, color, pos: 0, speed: BASE0, lane: 0, vis: 0, finished: false, time: 0, nextObst: 0, hitFlash: 0 };
+        return { id, name, color, pos: 0, speed: 0, step: 0, finished: false, time: 0 };
       }
-
-      function baseSpeed(pos) { return Math.min(SPEED_MAX, BASE0 + pos * BASE_RAMP); }
 
       // ---------- Rendu ----------
       function laneRect(i, n) {
-        const top = Math.min(110, H * 0.14);
-        const bottom = H - Math.max(30, H * 0.05);
+        const top = Math.min(120, H * 0.16);
+        const bottom = H - Math.max(40, H * 0.06);
         const usable = bottom - top;
         const laneH = usable / n;
         return { top: top + i * laneH, h: laneH };
       }
 
-      // y des "pieds" du poulet selon vis (0 = sol, 1 = plafond)
-      function tunnelY(ln) {
-        const floorY = ln.top + ln.h * 0.80;
-        const ceilY  = ln.top + ln.h * 0.30;
-        return { floorY, ceilY };
+      function trackGeom() {
+        const left = 56;
+        const right = W - 70;            // place pour la ligne d'arrivée
+        return { left, right, span: right - left };
       }
 
-      function drawChicken(x, feetY, scale, color, color2, flipped, flap, flash) {
+      function drawStickman(x, groundY, scale, color, step, running) {
         const s = scale;
         ctx.save();
-        ctx.translate(x, feetY);
-        if (flipped) ctx.scale(1, -1);
-        if (flash > 0) { ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(flash * 25)); }
-        // pattes
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = Math.max(1.5, 2 * s);
+        ctx.translate(x, groundY);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = Math.max(2, 3 * s);
         ctx.lineCap = 'round';
-        const legSwing = Math.sin(flap) * 3 * s;
+        // animation de course : balancement des membres
+        const swing = running ? Math.sin(step) : 0;
+        const swing2 = running ? Math.sin(step + Math.PI) : 0;
+        const bob = running ? Math.abs(Math.sin(step)) * 2 * s : 0;
+        const hipY = -22 * s - bob;
+        const headY = -42 * s - bob;
+        // jambes
         ctx.beginPath();
-        ctx.moveTo(-3 * s, -6 * s); ctx.lineTo(-3 * s + legSwing, 0);
-        ctx.moveTo(3 * s, -6 * s);  ctx.lineTo(3 * s - legSwing, 0);
+        ctx.moveTo(0, hipY);
+        ctx.lineTo(swing * 9 * s, hipY + 22 * s);
+        ctx.moveTo(0, hipY);
+        ctx.lineTo(swing2 * 9 * s, hipY + 22 * s);
         ctx.stroke();
-        // corps
-        ctx.fillStyle = color;
+        // tronc
         ctx.beginPath();
-        ctx.ellipse(0, -15 * s, 11 * s, 12 * s, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // aile
-        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        ctx.moveTo(0, hipY);
+        ctx.lineTo(0, headY + 7 * s);
+        ctx.stroke();
+        // bras
         ctx.beginPath();
-        ctx.ellipse(-2 * s, -15 * s + Math.sin(flap * 2) * 1.5 * s, 7 * s, 8 * s, 0.4, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(0, headY + 12 * s);
+        ctx.lineTo(swing2 * 8 * s, headY + 22 * s);
+        ctx.moveTo(0, headY + 12 * s);
+        ctx.lineTo(swing * 8 * s, headY + 22 * s);
+        ctx.stroke();
         // tête
+        ctx.beginPath();
         ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(7 * s, -26 * s, 7 * s, 0, Math.PI * 2);
-        ctx.fill();
-        // crête
-        ctx.fillStyle = '#ef4444';
-        ctx.beginPath();
-        ctx.arc(6 * s, -33 * s, 2.4 * s, 0, Math.PI * 2);
-        ctx.arc(9 * s, -33 * s, 2.4 * s, 0, Math.PI * 2);
-        ctx.fill();
-        // bec
-        ctx.fillStyle = '#f59e0b';
-        ctx.beginPath();
-        ctx.moveTo(13 * s, -26 * s); ctx.lineTo(19 * s, -24 * s); ctx.lineTo(13 * s, -23 * s);
-        ctx.closePath(); ctx.fill();
-        // oeil
-        ctx.fillStyle = '#111';
-        ctx.beginPath();
-        ctx.arc(8.5 * s, -27 * s, 1.4 * s, 0, Math.PI * 2);
+        ctx.arc(0, headY, 7 * s, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
 
-      function drawObstacle(x, ln, scale, lane) {
-        const { floorY, ceilY } = tunnelY(ln);
-        // largeur du rectangle = largeur de collision (monde -> px)
-        const w = OBST_HALF_W * 2 * SCALE;
-        // hauteur : vrai mur qui remplit presque tout le couloir,
-        // il ne reste qu'une ouverture étroite du côté opposé pour passer
-        const blockH = (floorY - ceilY) * 0.85;
-        const bx = x - w / 2;
-        const by = lane === 0 ? floorY - blockH : ceilY;
-        ctx.save();
-        // bloc plein avec dégradé pour le volume (pierre solide)
-        const g = ctx.createLinearGradient(bx, 0, bx + w, 0);
-        g.addColorStop(0, '#15803d');
-        g.addColorStop(0.5, '#22c55e');
-        g.addColorStop(1, '#15803d');
-        ctx.fillStyle = g;
-        ctx.fillRect(bx, by, w, blockH);
-        // arête supérieure éclairée + contour net pour le côté "solide"
-        ctx.fillStyle = 'rgba(255,255,255,0.22)';
-        ctx.fillRect(bx, lane === 0 ? by : by + blockH - 4, w, 4);
-        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(bx, by, w, blockH);
-        ctx.restore();
-      }
-
-      let animClock = 0;
       function render() {
-        animClock += 0.1;
-        // ciel
+        // fond ciel
         const sky = ctx.createLinearGradient(0, 0, 0, H);
-        sky.addColorStop(0, '#1d4ed8');
+        sky.addColorStop(0, '#1e3a8a');
         sky.addColorStop(1, '#0b1020');
         ctx.fillStyle = sky;
         ctx.fillRect(0, 0, W, H);
 
         const n = runners.length || 1;
-        const finishX = W - 40;
+        const g = trackGeom();
+        const finishX = g.right + 6;
+
+        // repères de distance verticaux (tous les 25 m)
+        const areaTop = Math.min(120, H * 0.16);
+        const areaBot = H - Math.max(40, H * 0.06);
+        ctx.textAlign = 'center';
+        ctx.font = "11px 'Trebuchet MS', sans-serif";
+        for (let d = 25; d < TRACK_LEN; d += 25) {
+          const mx = g.left + (d / TRACK_LEN) * g.span;
+          ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(mx, areaTop);
+          ctx.lineTo(mx, areaBot);
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(255,255,255,0.35)';
+          ctx.fillText(d + 'm', mx, areaTop - 4);
+        }
 
         runners.forEach((r, i) => {
           const ln = laneRect(i, n);
-          const { floorY, ceilY } = tunnelY(ln);
-          const scale = Math.max(0.5, Math.min(0.95, ln.h / 175));
+          const groundY = ln.top + ln.h * 0.78;
+          const scale = Math.max(0.6, Math.min(1.1, ln.h / 130));
 
-          // bande de voie
+          // piste
           ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.07)';
           ctx.fillRect(0, ln.top, W, ln.h);
-          // sol + plafond
-          ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+          // sol
+          ctx.strokeStyle = 'rgba(255,255,255,0.15)';
           ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.moveTo(0, floorY + 1); ctx.lineTo(W, floorY + 1);
-          ctx.moveTo(0, ceilY - 1);  ctx.lineTo(W, ceilY - 1);
+          ctx.moveTo(0, groundY + 2);
+          ctx.lineTo(W, groundY + 2);
           ctx.stroke();
 
-          // obstacles (mêmes positions, décalés selon la progression de CE poulet)
-          for (let k = 0; k < obstacles.length; k++) {
-            const o = obstacles[k];
-            const sx = CHICK_X + (o.pos - r.pos) * SCALE;
-            if (sx < -30 || sx > W + 30) continue;
-            drawObstacle(sx, ln, scale, o.lane);
-          }
-
-          // ligne d'arrivée (damier vertical) quand elle entre dans le champ
-          const fx = CHICK_X + (TRACK_LEN - r.pos) * SCALE;
-          if (fx < W + 40) {
-            const sq = Math.max(6, ln.h / 12);
-            for (let y = ln.top; y < ln.top + ln.h; y += sq) {
-              const on = Math.floor((y - ln.top) / sq) % 2 === 0;
+          // ligne d'arrivée (damier)
+          const sq = Math.max(5, ln.h / 10);
+          for (let y = ln.top; y < ln.top + ln.h; y += sq) {
+            for (let k = 0; k < 2; k++) {
+              const on = (Math.floor((y - ln.top) / sq) + k) % 2 === 0;
               ctx.fillStyle = on ? '#fff' : '#111';
-              ctx.fillRect(fx, y, sq, Math.min(sq, ln.top + ln.h - y));
+              ctx.fillRect(finishX + k * sq, y, sq, Math.min(sq, ln.top + ln.h - y));
             }
           }
 
-          // étiquette nom + distance
+          // étiquette nom
+          const frac = Math.min(1, r.pos / TRACK_LEN);
+          const x = g.left + frac * g.span;
           ctx.font = `${Math.round(11 * scale + 3)}px 'Trebuchet MS', sans-serif`;
-          ctx.textAlign = 'left';
+          ctx.textAlign = 'center';
           ctx.fillStyle = r.id === (me && me.id) ? '#fde047' : 'rgba(255,255,255,0.85)';
-          ctx.fillText(`${r.name}${r.finished ? '  🏁' : ''}`, 10, ln.top + 16);
+          const label = r.name + (r.finished ? '  🏁' : '');
+          ctx.fillText(label, x, ln.top + 16);
 
-          // poule : interpolation sol(0)->plafond(1)
-          const feetY = floorY + (ceilY - floorY) * r.vis;
-          const flipped = r.vis > 0.5;
-          drawChicken(CHICK_X, feetY, scale, r.color, r.color, flipped, animClock + i, r.hitFlash);
+          // bonhomme
+          const running = raceState === 'running' && !r.finished && r.speed > 0.15;
+          drawStickman(x, groundY, scale, r.color, r.step, running);
         });
       }
 
@@ -461,49 +394,28 @@
         const dt = Math.min(0.05, (now - lastT) / 1000);
         lastT = now;
 
-        if (gameState === 'running') {
-          // animation de bascule (tous les poulets)
+        if (raceState === 'running') {
+          // physique de mon coureur
+          me.speed -= DRAG * me.speed * dt;
+          if (me.speed < 0) me.speed = 0;
+          me.pos += me.speed * dt;
+          me.step += (0.6 + me.speed * 0.9) * dt * 12;
+          if (!me.finished && me.pos >= TRACK_LEN) finishRace();
+
+          // anim des pairs (selon leur dernière vitesse connue)
           runners.forEach(r => {
-            const target = r.lane;
-            r.vis += (target - r.vis) * Math.min(1, dt * 16);
-            if (r.hitFlash > 0) r.hitFlash = Math.max(0, r.hitFlash - dt);
+            if (r === me) return;
+            if (!r.finished) r.step += (0.6 + (r.speed || 0) * 0.9) * dt * 12;
           });
 
-          if (!me.finished) {
-            // physique : retour progressif vers la vitesse de croisière
-            const base = baseSpeed(me.pos);
-            me.speed += (base - me.speed) * Math.min(1, RECOVER * dt);
-            let newPos = me.pos + me.speed * dt;
+          // HUD
+          $('hud-pos').textContent = Math.floor(Math.min(TRACK_LEN, me.pos)) + ' m';
+          const el = (now - raceStartAt) / 1000;
+          $('hud-time').textContent = el.toFixed(1) + ' s';
+          if (el > MAX_TIME && !me.finished) finishRace();
 
-            // obstacles SOLIDES : impossible de traverser un bloc du même côté.
-            // Il faut être de l'autre côté pour passer, sinon on se cogne et on stoppe.
-            while (me.nextObst < obstacles.length) {
-              const o = obstacles[me.nextObst];
-              const edge = o.pos - OBST_HALF_W;       // bord d'attaque du mur
-              if (newPos < edge) break;               // pas encore atteint ce bloc
-              // côté "engagé" = le plus proche (sol si vis<0.5, sinon plafond)
-              const myLane = me.vis < 0.5 ? 0 : 1;
-              if (myLane === o.lane) {
-                // mur du même côté -> on reste collé contre tant qu'on n'a pas basculé
-                newPos = edge;
-                me.speed = 0;
-                me.hitFlash = 0.25;
-                break;
-              }
-              me.nextObst++;                          // bon côté -> on franchit le bloc
-            }
-            me.pos = newPos;
-
-            if (me.pos >= TRACK_LEN) finishRace();
-
-            // HUD
-            $('hud-pos').textContent = Math.floor(Math.min(TRACK_LEN, me.pos)) + ' m';
-            const el = (now - startAt) / 1000;
-            $('hud-time').textContent = el.toFixed(1) + ' s';
-            if (el > MAX_TIME) finishRace();
-
-            maybeSendState(now);
-          }
+          // diffusion position aux pairs
+          maybeSendPos(now);
         }
 
         render();
@@ -511,29 +423,30 @@
       }
       requestAnimationFrame(loop);
 
-      // ---------- Entrée (tape = bascule sol/plafond) ----------
+      // ---------- Entrée (tape) ----------
       function onTap() {
-        if (gameState !== 'running' || me.finished) return;
-        me.lane = me.lane === 0 ? 1 : 0;
+        if (raceState !== 'running' || me.finished) return;
+        me.speed += TAP_IMPULSE;
       }
       const tapZone = $('tap-zone');
       tapZone.addEventListener('pointerdown', (e) => { e.preventDefault(); onTap(); });
-      window.addEventListener('keydown', (e) => {
-        if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowDown') { e.preventDefault(); onTap(); }
-      });
+      window.addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); onTap(); } });
 
       // ---------- Compte à rebours + départ ----------
       function startCountdown() {
-        if (gameState !== 'idle') return;
-        gameState = 'countdown';
-        $('hud-len').textContent = TRACK_LEN;
+        if (raceState !== 'idle') return;
+        raceState = 'countdown';
         $('hud').classList.add('show');
         const ov = $('countdown-overlay');
         ov.classList.add('show');
-        const steps = ['3', '2', '1', 'COURS !'];
+        const steps = ['3', '2', '1', 'GO !'];
         let i = 0;
         const tick = () => {
-          if (i >= steps.length) { ov.classList.remove('show'); beginRace(); return; }
+          if (i >= steps.length) {
+            ov.classList.remove('show');
+            beginRace();
+            return;
+          }
           const num = $('countdown-num');
           num.textContent = steps[i];
           num.classList.remove('pop-anim'); void num.offsetWidth; num.classList.add('pop-anim');
@@ -544,43 +457,40 @@
       }
 
       function beginRace() {
-        gameState = 'running';
-        startAt = performance.now();
-        // solo : un parcours aléatoire différent à chaque course ; MP : graine fixe identique pour tous
-        obstacleSeed = isMP ? FIXED_SEED : ((Math.random() * 0xffffffff) >>> 0);
-        generateObstacles();
-        runners.forEach(r => { r.pos = 0; r.speed = BASE0; r.lane = 0; r.vis = 0; r.finished = false; r.time = 0; r.nextObst = 0; r.hitFlash = 0; });
+        raceState = 'running';
+        raceStartAt = performance.now();
+        runners.forEach(r => { r.pos = 0; r.speed = 0; r.finished = false; });
         tapZone.classList.add('active');
         $('tap-hint').classList.remove('hidden');
       }
 
-      let raceDone = false;
       function finishRace() {
         if (me.finished) return;
         me.finished = true;
         me.pos = TRACK_LEN;
-        me.time = (performance.now() - startAt) / 1000;
+        me.time = (performance.now() - raceStartAt) / 1000;
         tapZone.classList.remove('active');
         $('tap-hint').classList.add('hidden');
 
         if (isMP) {
-          mpSend({ type: 'relay', data: { type: 'chick-fin', t: me.time } });
-          mpSend({ type: 'game-score', score: scoreFromTime(me.time) });
+          mpSend({ type: 'relay', data: { type: 'sprint-fin', t: me.time } });
+          const pts = scoreFromTime(me.time);
+          mpSend({ type: 'game-score', score: pts });
           $('mp-done-time').textContent = me.time.toFixed(2) + ' s';
-          $('mp-done-msg').textContent = 'En attente des autres poulets…';
+          $('mp-done-msg').textContent = 'En attente des autres coureurs…';
           show($('mp-done-overlay'));
         } else {
-          gameState = 'done';
+          raceState = 'done';
           $('result-time').textContent = me.time.toFixed(2) + ' s';
-          $('result-detail').textContent = me.time < 50 ? 'Sans-faute ou presque ! 🔥'
-            : me.time < 62 ? 'Bien couru !' : 'Anticipe les murs pour ne plus te cogner !';
+          $('result-detail').textContent = me.time < 28 ? 'Quel sprinteur ! 🔥'
+            : me.time < 42 ? 'Bien couru !' : 'Continue à t\'entraîner !';
           show($('result-overlay'));
         }
       }
 
       function scoreFromTime(t) {
-        // plus c'est rapide, plus c'est de points (1er arrivé = vainqueur)
-        return Math.max(100, Math.min(1000, Math.round(1000 - (t - 42) * 30)));
+        // plus c'est rapide, plus c'est de points (≈ 100 → 1000)
+        return Math.max(100, Math.min(1000, Math.round(1000 - (t - 25) * 30)));
       }
 
       // =====================================================
@@ -592,7 +502,8 @@
         $('start-btn').addEventListener('click', () => { hide($('start-overlay')); startCountdown(); });
         $('replay-btn').addEventListener('click', () => {
           hide($('result-overlay'));
-          gameState = 'idle';
+          raceState = 'idle';
+          me.finished = false; me.pos = 0; me.speed = 0; me.time = 0;
           startCountdown();
         });
       }
@@ -604,21 +515,24 @@
       let mpTotal = 0;
       let mpPlayers = [];
       let mpReadySet = new Set();
-      let stateSentAt = 0;
+      let posSentAt = 0;
 
       function mpSend(payload) {
         if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
       }
 
-      function maybeSendState(now) {
+      function maybeSendPos(now) {
         if (!isMP || me.finished) return;
-        if (now - stateSentAt < 80) return;   // ~12 Hz
-        stateSentAt = now;
-        mpSend({ type: 'relay', data: { type: 'chick-st', f: me.pos / TRACK_LEN, l: me.vis } });
+        if (now - posSentAt < 80) return;   // ~12 Hz
+        posSentAt = now;
+        mpSend({ type: 'relay', data: { type: 'sprint-pos', f: me.pos / TRACK_LEN, sp: me.speed } });
       }
 
       function mpBuildRunners(players) {
-        runners = players.map((p, i) => makeRunner(p.id, p.name, LANE_COLORS[i % LANE_COLORS.length]));
+        runners = players.map((p, i) => {
+          const r = makeRunner(p.id, p.name, LANE_COLORS[i % LANE_COLORS.length]);
+          return r;
+        });
         me = runners.find(r => r.id === myId) || runners[0];
         mpTotal = players.length;
         mpPlayers = players;
@@ -659,25 +573,25 @@
         switch (msg.type) {
           case 'game-connected':
             if (msg.players) mpBuildRunners(msg.players);
-            $('mp-wait-msg').textContent = `${msg.connectedCount} / ${msg.total} poulets prêts…`;
+            $('mp-wait-msg').textContent = `${msg.connectedCount} / ${msg.total} coureurs prêts…`;
             mpMaybeStart(msg.connectedCount);
             break;
 
           case 'player-reconnected':
-            $('mp-wait-msg').textContent = `${msg.connectedCount} / ${mpTotal} poulets prêts…`;
+            $('mp-wait-msg').textContent = `${msg.connectedCount} / ${mpTotal} coureurs prêts…`;
             mpMaybeStart(msg.connectedCount);
             break;
 
           case 'relay': {
             const d = msg.data || {};
             const r = runners.find(x => x.id === msg.from);
-            if (!r || r === me) break;
-            if (d.type === 'chick-st') {
+            if (!r) break;
+            if (d.type === 'sprint-pos') {
               r.pos = Math.min(TRACK_LEN, d.f * TRACK_LEN);
-              if (typeof d.l === 'number') { r.vis = d.l; r.lane = d.l > 0.5 ? 1 : 0; }
-            } else if (d.type === 'chick-fin') {
-              r.finished = true; r.pos = TRACK_LEN; r.time = d.t;
-            } else if (d.type === 'chick-ready') {
+              r.speed = d.sp || 0;
+            } else if (d.type === 'sprint-fin') {
+              r.finished = true; r.pos = TRACK_LEN; r.time = d.t; r.speed = 0;
+            } else if (d.type === 'sprint-ready') {
               mpReadySet.add(msg.from);
               mpUpdateReadyUI();
               mpCheckAllReady();
@@ -687,7 +601,7 @@
 
           case 'score-waiting':
             if (!$('mp-done-overlay').classList.contains('hidden')) {
-              $('mp-done-msg').textContent = `Arrivée : ${msg.submitted}/${msg.total} poulets…`;
+              $('mp-done-msg').textContent = `Arrivée : ${msg.submitted}/${msg.total} coureurs…`;
             }
             break;
 
@@ -699,12 +613,14 @@
 
       const MEDALS = ['🥇', '🥈', '🥉'];
       function mpShowRanking(msg) {
-        gameState = 'done';
+        raceState = 'done';
         tapZone.classList.remove('active');
+        hide($('mp-done-overlay'));
         $('hud').classList.remove('show');
 
         const scores = msg.roundScores || {};
         const players = (runners.length ? runners : (msg.players || []));
+        // tri croissant : pire d'abord, meilleur (winner) en dernier
         const sorted = [...players].sort((a, b) => (scores[a.id] ?? 0) - (scores[b.id] ?? 0));
         const total = sorted.length;
 
@@ -722,7 +638,6 @@
           list.appendChild(entry);
         });
 
-        hide($('mp-done-overlay'));
         hide($('reveal-continue-btn'));
         show($('score-reveal-overlay'));
 
@@ -763,7 +678,7 @@
           $('mp-ready-btn').textContent = '✅ Prêt !';
           mpReadySet.add(myId);
           mpUpdateReadyUI();
-          mpSend({ type: 'relay', data: { type: 'chick-ready' } });
+          mpSend({ type: 'relay', data: { type: 'sprint-ready' } });
           mpCheckAllReady();
         });
         mpConnect();

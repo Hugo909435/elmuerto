@@ -124,7 +124,7 @@
     <div id="mp-overlay" class="overlay hidden">
       <h1>🤼 Sumo du salon</h1>
       <p>Pousse les autres sumos hors de l'arène à l'aide de ton joystick. Reste le dernier dans le cercle pour remporter la manche&nbsp;!</p>
-      <div class="score-note" style="margin-bottom:4px">🏆 <b>Score :</b> placement (1er = 100pts, 2e = 60pts, 3e = 35pts…) + 25pts par élimination</div>
+      <div class="score-note" style="margin-bottom:4px">🏆 <b>Score :</b> le dernier sumo debout dans l'arène gagne la manche. Plus tu tiens longtemps, mieux tu t'en sors&nbsp;!</div>
       <p id="mp-sub">Connexion à la salle d'attente…</p>
       <ul id="mp-players"></ul>
       <button id="mp-start" class="btn hidden">Lancer le combat 🤼</button>
@@ -135,7 +135,7 @@
     <div id="start-overlay" class="overlay hidden">
       <h1>🤼 EL MUERTO SUMO</h1>
       <p>Ton sumo <b>tourne tout seul</b> sur lui-même quand tu ne touches rien.<br /><b>Maintiens</b> l'écran pour <b>foncer tout droit</b> et <b>pousser</b> les autres hors du cercle.<br />Reste à fond assez longtemps et tu <b>🔥 prends feu</b> : tu projettes les autres bien plus loin&nbsp;!<br />Le ring <b>rétrécit</b> à chaque élimination (la zone rouge clignote avant de disparaître).<br />Dernier sumo dans l'arène gagne&nbsp;!</p>
-      <div class="score-note">🏆 <b>Score :</b> placement (1er = 100pts, 2e = 60pts, 3e = 35pts…) + 25pts par élimination !</div>
+      <div class="score-note">🏆 <b>Victoire :</b> le dernier sumo debout dans l'arène gagne la manche. Chaque fois qu'un adversaire tombe hors du ring, tu gagnes du terrain au classement !</div>
       <button id="start-btn" class="btn">Je suis prêt&nbsp;!</button>
     </div>
 
@@ -197,8 +197,6 @@
       const LIVES = 3;
       const RESPAWN_DELAY = 1.3;        // s avant réapparition
       const INVULN_TIME = 1.6;          // s d'invincibilité après respawn
-      const PLACE_PTS = [100, 60, 35, 15, 5, 0, 0, 0]; // 1er → dernier
-      const KILL_PTS = 25;
 
       // Point d'apparition d'un slot, sur un anneau intérieur au ring courant
       // (on reste bien à l'intérieur même si le ring est en train de rétrécir).
@@ -251,7 +249,6 @@
       let state = 'boot';            // boot | mpwait | countdown | playing | ended
       const sumos = new Map();       // id -> sumo (inclut le mien)
       let me = null;
-      let eliminationOrder = [];     // ids dans l'ordre d'élimination (1er éliminé = index 0)
       const particles = [];
       let countdown = 0, netAccum = 0;
 
@@ -266,7 +263,7 @@
           spin: Math.random() < 0.5 ? 1 : -1,
           lives: LIVES, alive: true,
           invuln: INVULN_TIME, respawn: 0,
-          kills: 0, lastHitBy: null,
+          kills: 0,
           // charge / feu
           chargeTime: 0, onFire: false,
           // interpolation réseau
@@ -474,11 +471,6 @@
               const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
               spawnImpact(cx, cy);
             }
-            // Attribue le dernier impact fort pour le comptage des kills
-            if (rvn < -80) {
-              if (a.isMe && !b.isMe) b.lastHitBy = myId;
-              else if (b.isMe && !a.isMe) a.lastHitBy = myId;
-            }
           }
         }
       }
@@ -490,9 +482,6 @@
         s.respawn = RESPAWN_DELAY;
         s.vx = 0; s.vy = 0;
         s.onFire = false; s.chargeTime = 0;
-        // Crédite un kill à celui qui a poussé ce sumo hors du ring
-        if (me && !s.isMe && s.lastHitBy === me.id) me.kills = (me.kills || 0) + 1;
-        if (s.lives <= 0 && !eliminationOrder.includes(s.id)) eliminationOrder.push(s.id);
         renderHud();
         if (s.isMe) {
           showToast(s.lives > 0 ? '😵 Éjecté !' : '☠️ KO', s.lives > 0 ? '#f59e0b' : '#ef4444');
@@ -805,38 +794,15 @@
         const iWon = winner && winner.isMe;
         $('end-title').textContent = winner ? (iWon ? '🏆 Victoire !' : `${escapeHtml(winner.name)} gagne`) : 'Égalité';
         $('end-sub').textContent = winner ? 'Dernier sumo dans l\'arène' : '';
-
-        // Compléter l'ordre d'élimination avec le gagnant
-        if (winner && !eliminationOrder.includes(winner.id)) eliminationOrder.push(winner.id);
-        for (const s of sumos.values()) {
-          if (!eliminationOrder.includes(s.id)) eliminationOrder.unshift(s.id);
-        }
-        const n = sumos.size;
-        const ranked = [...eliminationOrder].reverse().map(id => sumos.get(id)).filter(Boolean);
-
-        $('end-list').innerHTML = ranked.map((s, i) => {
-          const placePts = PLACE_PTS[i] || 0;
-          const kills = s.kills || 0;
-          const total = placePts + kills * KILL_PTS;
-          return `<div class="end-row"><span class="rk">${['🥇','🥈','🥉'][i] || (i + 1) + '.'}</span>` +
-            `<span class="nm" style="color:${s.color}">${escapeHtml(s.name)}${s.isMe ? ' (toi)' : ''}</span>` +
-            `<span class="kd">${kills} élim · <b>${total}pts</b></span></div>`;
-        }).join('');
+        const ranked = [...sumos.values()].sort((a, b) => (b.lives - a.lives) || (b.kills || 0) - (a.kills || 0));
+        $('end-list').innerHTML = ranked.map((s, i) =>
+          `<div class="end-row"><span class="rk">${['🥇','🥈','🥉'][i] || (i + 1) + '.'}</span>` +
+          `<span class="nm" style="color:${s.color}">${escapeHtml(s.name)}${s.isMe ? ' (toi)' : ''}</span>` +
+          `<span class="kd">${Math.max(0, s.lives)} ❤</span></div>`
+        ).join('');
         ovl.classList.remove('hidden');
 
-        if (MP && ROOM) {
-          const myIdx = eliminationOrder.indexOf(me ? me.id : myId);
-          const myRankFromTop = n - 1 - myIdx;
-          const placePts = myIdx >= 0 ? (PLACE_PTS[myRankFromTop] || 0) : 0;
-          const myScore = placePts + (me ? (me.kills || 0) : 0) * KILL_PTS;
-          net && net.send({ type: 'game-score', score: myScore });
-          $('rematch-btn').classList.add('hidden');
-          $('rematch-wait').classList.remove('hidden');
-          $('rematch-wait').textContent = `Score : ${myScore} pts — retour au lobby…`;
-          setTimeout(() => {
-            window.location.href = `/?room=${encodeURIComponent(ROOM)}&pid=${encodeURIComponent(MY_PID)}&name=${encodeURIComponent(MY_NAME)}`;
-          }, 3500);
-        } else if (MP) {
+        if (MP) {
           $('rematch-btn').classList.toggle('hidden', !isHost);
           $('rematch-wait').classList.toggle('hidden', isHost);
         } else {
@@ -851,7 +817,6 @@
       function startSolo() {
         MP = false; myId = 'me';
         sumos.clear(); particles.length = 0;
-        eliminationOrder = [];
         me = makeSumo('me', 0, MY_NAME, true, false);
         sumos.set('me', me);
         const names = ['Tonkatsu', 'Big Bao', 'Dumpling'];
@@ -936,7 +901,6 @@
       // Top départ : on (re)crée tous les sumos à partir de la liste du serveur.
       function onMatchStart(m) {
         sumos.clear(); particles.length = 0;
-        eliminationOrder = [];
         const sorted = [...m.players].sort((a, b) => a.slot - b.slot);
         for (const e of sorted) {
           const s = makeSumo(e.id, e.slot, e.name, e.id === myId, false);
@@ -953,15 +917,10 @@
         if (!t || t.isMe || !s) return;
         t.tx = s[0]; t.ty = s[1]; t.tangle = s[2];
         const wasAlive = t.alive;
-        const prevLives = t.lives;
         t.lives = s[3]; t.alive = !!s[4]; t.invuln = s[5] ? Math.max(t.invuln, 0.1) : 0;
         t.tvx = s[6] || 0; t.tvy = s[7] || 0;
         t.onFire = !!s[8];
-        if (wasAlive && !t.alive) {
-          spawnFall(t.x, t.y, t.color);
-          if (prevLives > t.lives && t.lastHitBy === myId && me) me.kills = (me.kills || 0) + 1;
-          if (t.lives <= 0 && !eliminationOrder.includes(id)) eliminationOrder.push(id);
-        }
+        if (wasAlive && !t.alive) spawnFall(t.x, t.y, t.color);
         renderHud();
       }
 

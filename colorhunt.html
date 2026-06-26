@@ -269,6 +269,12 @@
       .rp-breakdown { font-size: 12px; opacity: 0.65; padding-left: 46px; }
       .rp-photos { display: flex; gap: 6px; padding-left: 46px; flex-wrap: wrap; margin-top: 2px; }
       .rp-photo-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25); }
+      .rp-section-sep { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; opacity: 0.55; text-align: center; padding: 4px 0 8px; width: 100%; max-width: 420px; border-top: 1px solid rgba(255,255,255,0.12); margin-top: 4px; }
+      #reveal-global { width: 100%; max-width: 420px; }
+      .rg-entry { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); margin-bottom: 6px; }
+      .rg-rank { font-size: 20px; width: 28px; text-align: center; flex-shrink: 0; }
+      .rg-name { flex: 1; font-weight: 600; font-size: 14px; }
+      .rg-score { font-size: 16px; font-weight: 900; color: #7dd3fc; flex-shrink: 0; }
 
       /* ---- Solo result / end ---- */
       #result-photo { width: min(68vw, 300px); height: min(68vw, 300px); object-fit: cover; border-radius: 16px; border: 3px solid rgba(255,255,255,0.2); display: block; }
@@ -366,6 +372,10 @@
     <div id="score-reveal-overlay" class="overlay hidden">
       <h1 id="reveal-title">🏆 Résultats</h1>
       <div id="reveal-list"></div>
+      <div id="reveal-global" class="hidden">
+        <div class="rp-section-sep">📊 Classement global</div>
+        <div id="reveal-global-list"></div>
+      </div>
       <button id="reveal-continue-btn" class="btn hidden">Retour au lobby →</button>
     </div>
 

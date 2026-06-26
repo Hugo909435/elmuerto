@@ -152,6 +152,17 @@
         font-weight: 800;
         color: #ffe27a;
       }
+      .score-note {
+        background: rgba(255,226,122,0.10);
+        border: 1px solid rgba(255,226,122,0.28);
+        border-radius: 12px;
+        padding: 10px 18px;
+        font-size: clamp(13px, 3.5vw, 15px);
+        max-width: 420px;
+        line-height: 1.5;
+        text-align: center;
+        color: #ffe27a;
+      }
       .btn {
         pointer-events: auto;
         cursor: pointer;
@@ -171,8 +182,9 @@
         transform: scale(0.95);
       }
     </style>
-    <script type="module" crossorigin src="/assets/minigolf-DwcHLHdz.js"></script>
+    <script type="module" crossorigin src="/assets/minigolf-BukoSEYO.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
+    <link rel="modulepreload" crossorigin href="/assets/three.module-QbF15FtB.js">
   </head>
   <body>
     <div id="app"></div>
@@ -199,7 +211,8 @@
         Un coup faible roule au sol, un coup puissant envoie la balle en cloche
         par-dessus les murs. Rentre-la dans le trou en un minimum de coups !
       </p>
-      <button id="start-btn" class="btn">Jouer</button>
+      <div class="score-note">🏆 <b>Score :</b> moins de coups = mieux ! Chaque trou te donne un score selon le nombre de frappes. Essaie le coup parfait en un seul tir !</div>
+      <button id="start-btn" class="btn">Je suis prêt&nbsp;!</button>
     </div>
 
     <!-- Win overlay -->
@@ -216,7 +229,24 @@
       <p class="big-score" id="end-score"></p>
       <p id="end-detail"></p>
       <button id="restart-btn" class="btn">Rejouer</button>
+      <button id="back-wheel-btn" class="btn" style="display:none;margin-top:10px;background:linear-gradient(180deg,#4ade80,#22a85a);color:#05290f;">Retour à la roue 🎰</button>
     </div>
-
+
+    <script>
+      (function() {
+        const p = new URLSearchParams(location.search);
+        const room = p.get('room'), pid = p.get('pid');
+        if (!room || !pid) return;
+        const btn = document.getElementById('back-wheel-btn');
+        if (btn) {
+          btn.style.display = '';
+          btn.addEventListener('click', () => {
+            location.href = '/?room=' + encodeURIComponent(room) + '&pid=' + encodeURIComponent(pid);
+          });
+        }
+        const homeBtn = document.getElementById('home-btn');
+        if (homeBtn) homeBtn.href = '/?room=' + encodeURIComponent(room) + '&pid=' + encodeURIComponent(pid);
+      })();
+    </script>
   </body>
 </html>

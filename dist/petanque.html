@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Pétanque — El Muerto Arcade</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 100%; height: 100%;
+        overflow: hidden;
+        background: #0b1f12;
+        font-family: 'Trebuchet MS', system-ui, sans-serif;
+        color: #fff;
+        -webkit-user-select: none; user-select: none;
+        touch-action: none;
+      }
+      #app { position: fixed; inset: 0; }
+      canvas { display: block; }
+
+      /* ── HUD ── */
+      #hud {
+        position: fixed;
+        top: 16px; left: 0; right: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        pointer-events: none;
+        z-index: 10;
+      }
+      .score-pill {
+        display: flex; align-items: center; gap: 8px;
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(6px);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 999px;
+        padding: 8px 18px;
+        font-size: 20px; font-weight: 800;
+      }
+      .dot {
+        width: 12px; height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      .dot.blue { background: #2563eb; box-shadow: 0 0 8px #2563eb; }
+      .dot.red  { background: #dc2626; box-shadow: 0 0 8px #dc2626; }
+      #hud-turn {
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(6px);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 999px;
+        padding: 8px 20px;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+        min-width: 220px;
+        text-align: center;
+      }
+
+      /* ── Barre de puissance ── */
+      #power-wrap {
+        position: fixed;
+        bottom: 40px; left: 50%; transform: translateX(-50%);
+        width: 220px;
+        z-index: 10;
+        pointer-events: none;
+        text-align: center;
+      }
+      #power-wrap.hidden { display: none; }
+      #power-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        opacity: 0.7;
+        margin-bottom: 6px;
+      }
+      #power-track {
+        width: 100%;
+        height: 8px;
+        background: rgba(255,255,255,0.18);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      #power-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #4ade80, #f59e0b, #ef4444);
+        transition: width 0.05s linear;
+      }
+
+      /* ── Bannière de manche ── */
+      #score-banner {
+        position: fixed;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0,0,0,0.75);
+        backdrop-filter: blur(8px);
+        border-radius: 18px;
+        padding: 18px 36px;
+        font-size: 22px; font-weight: 800;
+        text-align: center;
+        z-index: 20;
+        border: 1px solid rgba(255,255,255,0.15);
+        pointer-events: none;
+      }
+      #score-banner.hidden { display: none; }
+      #score-banner.win   { border-color: #4ade80; color: #4ade80; }
+      #score-banner.lose  { border-color: #ef4444; color: #f87171; }
+      #score-banner.neutral { color: #fde68a; }
+
+      /* ── Overlay attente ── */
+      #waiting-overlay {
+        position: fixed; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        background: rgba(11,31,18,0.92);
+        backdrop-filter: blur(6px);
+        z-index: 50;
+      }
+      #waiting-overlay .logo {
+        font-size: 13px; letter-spacing: 5px;
+        text-transform: uppercase; color: #4ade80; opacity: 0.9;
+        margin-bottom: 12px;
+      }
+      #waiting-overlay h1 { font-size: 42px; margin-bottom: 18px; }
+      #waiting-msg { opacity: 0.65; font-size: 16px; }
+      .spinner {
+        width: 40px; height: 40px;
+        border: 3px solid rgba(255,255,255,0.15);
+        border-top-color: #4ade80;
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+        margin: 24px auto 0;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* ── Overlay fin de partie ── */
+      #gameover-overlay {
+        position: fixed; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        background: rgba(11,31,18,0.9);
+        backdrop-filter: blur(8px);
+        z-index: 50;
+      }
+      #gameover-overlay.hidden { display: none; }
+      #gameover-title { font-size: 52px; margin-bottom: 10px; }
+      #gameover-label { opacity: 0.6; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+      #gameover-score { font-size: 40px; font-weight: 800; margin-bottom: 32px; }
+      .btn-lobby {
+        cursor: pointer;
+        background: linear-gradient(180deg, #4ade80, #22a85a);
+        color: #05290f;
+        border: none;
+        border-radius: 999px;
+        padding: 16px 40px;
+        font-size: 17px; font-weight: 800;
+        letter-spacing: 1px; text-transform: uppercase;
+        font-family: inherit;
+        transition: transform 0.1s ease;
+      }
+      .btn-lobby:active { transform: scale(0.97); }
+
+      /* ── Lien retour ── */
+      #home-link {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 11;
+        text-decoration: none;
+        color: rgba(255,255,255,0.55);
+        font-size: 13px;
+        background: rgba(0,0,0,0.4);
+        backdrop-filter: blur(4px);
+        padding: 8px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.12);
+        transition: color 0.15s;
+      }
+      #home-link:hover { color: #fff; }
+    </style>
+    <script type="module" crossorigin src="/assets/petanque-B9iIKXPc.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
+    <link rel="modulepreload" crossorigin href="/assets/three.module-QbF15FtB.js">
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <a id="home-link" href="/">← Lobby</a>
+
+    <!-- HUD -->
+    <div id="hud">
+      <div class="score-pill">
+        <span class="dot blue"></span>
+        <span id="score-me">0</span>
+      </div>
+      <div id="hud-turn">En attente…</div>
+      <div class="score-pill">
+        <span id="score-opp">0</span>
+        <span class="dot red"></span>
+      </div>
+    </div>
+
+    <!-- Barre de puissance (visible pendant le drag) -->
+    <div id="power-wrap" class="hidden">
+      <div id="power-label">Puissance</div>
+      <div id="power-track"><div id="power-fill"></div></div>
+    </div>
+
+    <!-- Bannière résultat de manche -->
+    <div id="score-banner" class="hidden"></div>
+
+    <!-- Overlay d'attente -->
+    <div id="waiting-overlay">
+      <div class="logo">El Muerto Arcade</div>
+      <h1>🎯 Pétanque</h1>
+      <p style="opacity:0.85;font-size:15px;max-width:320px;text-align:center;line-height:1.5;margin-bottom:8px">Lance ta boule et place-la <b>le plus près du cochonnet</b>. Chaque boule plus proche que la meilleure boule adverse vaut <b>1 point</b>. Premier à 13 points gagne&nbsp;!</p>
+      <div style="background:rgba(255,226,122,0.10);border:1px solid rgba(255,226,122,0.28);border-radius:12px;padding:10px 18px;font-size:14px;max-width:300px;text-align:center;color:#ffe27a;line-height:1.5;margin-bottom:14px">🏆 <b>Score :</b> 1 pt par boule plus proche du but que ton adversaire. Remporte la manche pour avancer au tournoi !</div>
+      <p id="waiting-msg">Connexion au serveur…</p>
+      <div class="spinner"></div>
+    </div>
+
+    <!-- Overlay fin de partie -->
+    <div id="gameover-overlay" class="hidden">
+      <div id="gameover-title"></div>
+      <div id="gameover-label">Score final</div>
+      <div id="gameover-score"></div>
+      <button class="btn-lobby" id="btn-back-lobby">Retour au lobby</button>
+    </div>
+
+  </body>
+</html>
