@@ -72,8 +72,9 @@
 
       .overlay {
         position: fixed; inset: 0; display: flex; flex-direction: column;
-        align-items: center; justify-content: center; text-align: center; gap: 16px;
+        align-items: center; justify-content: safe center; text-align: center; gap: 16px;
         background: rgba(5, 18, 12, 0.85); backdrop-filter: blur(4px); z-index: 20; padding: 24px;
+        overflow-y: auto; -webkit-overflow-scrolling: touch;
       }
       .overlay.hidden { display: none; }
       .overlay h1 {
@@ -122,6 +123,7 @@
       #mp-players .off { font-size: 11px; opacity: 0.5; font-style: italic; }
       #mp-maps { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; max-width: 760px; }
       #mp-maps .map-card { outline-offset: 2px; }
+      .map-card.selected { border-color: #4ade80; box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.45); }
       #mp-error {
         position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
         background: #b91c1c; color: #fff; padding: 12px 22px; border-radius: 12px;
@@ -208,7 +210,8 @@
       <p id="mp-sub">Connexion à la salle d'attente…</p>
       <ul id="mp-players"></ul>
       <div id="mp-maps"></div>
-      <button id="mp-start" class="btn hidden" style="margin-top:6px">Lancer la course 🏁</button>
+      <button id="mp-start" class="btn hidden" style="margin-top:6px">Lancer le circuit choisi 🏁</button>
+      <button id="mp-gp" class="btn hidden" style="margin-top:6px;background:linear-gradient(180deg,#fbbf24,#d97706);color:#3a1d00;">Grand Prix aléatoire 🎲</button>
       <p id="mp-wait" class="hidden" style="opacity:.7">En attente que l'hôte lance la course…</p>
     </div>
 
@@ -238,7 +241,9 @@
       let net = null;            // client WebSocket (créé dans mpInit)
       let myId = null;           // mon identifiant de joueur (reçu du serveur)
       let isHost = false;        // suis-je l'hôte du salon ?
-      let raceMapIndex = 0;      // circuit choisi par l'hôte
+      let raceMapIndex = 0;      // circuit en cours (décidé par le serveur, ordre aléatoire)
+      let selectedMpMap = 0;     // circuit choisi par l'hôte dans la salle d'attente
+      let raceRound = 1, raceTotal = 1;   // Grand Prix : manche en cours / nombre de circuits
       const peers = new Map();   // id -> voiture distante (interpolée)
       // 8 couleurs / placements de départ pour jusqu'à 8 joueurs.
       const MP_COLORS = ['#4ade80', '#ef4444', '#3b82f6', '#f59e0b', '#a855f7', '#ec4899', '#14b8a6', '#f97316'];
@@ -1069,7 +1074,14 @@
 
       document.getElementById('restart-btn').addEventListener('click', () => {
         if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-        if (MP) { if (isHost && net) net.send({ type: 'race-go' }); return; }
+        if (MP) {
+          if (isHost && net) {
+            if (raceRound < raceTotal) net.send({ type: 'race-next' });
+            else if (raceTotal > 1) net.send({ type: 'race-go', maps: MAPS.length });
+            else net.send({ type: 'race-go', single: true, mapIndex: currentMap, maps: MAPS.length });
+          }
+          return;
+        }
         startMap(currentMap);
       });
       document.getElementById('change-btn').addEventListener('click', () => {
@@ -1163,10 +1175,12 @@
           ul.appendChild(li);
         });
         document.getElementById('mp-start').classList.toggle('hidden', !isHost);
+        document.getElementById('mp-gp').classList.toggle('hidden', !isHost);
         document.getElementById('mp-wait').classList.toggle('hidden', isHost);
         document.getElementById('mp-sub').textContent = isHost
-          ? 'Choisis le circuit, puis lance la course 🏁'
+          ? 'Choisis un circuit puis lance-le 🏁, ou tente le Grand Prix aléatoire 🎲'
           : "En attente que l'hôte lance la course…";
+        highlightMap(selectedMpMap);
       }
 
       function buildMpMaps() {
@@ -1186,25 +1200,31 @@
             '<div class="mc-desc">' + m.desc + '</div>';
           card.appendChild(info);
           drawMiniTrack(cv, m);
+          // L'hôte peut cliquer une carte pour choisir le circuit ; les autres
+          // ne voient qu'un aperçu.
           card.addEventListener('click', () => {
             if (!isHost || !net) return;
+            selectedMpMap = i;
+            highlightMap(i);
             net.send({ type: 'race-setmap', mapIndex: i });
           });
           wrap.appendChild(card);
         });
-        highlightMap(raceMapIndex);
+        highlightMap(selectedMpMap);
       }
 
-      function highlightMap(idx) {
-        raceMapIndex = idx;
-        document.querySelectorAll('#mp-maps .map-card').forEach((c) => {
-          c.style.outline = +c.dataset.i === idx ? '3px solid #4ade80' : '2px solid transparent';
-        });
+      // Met en évidence le circuit choisi par l'hôte (carte sélectionnée).
+      function highlightMap(i) {
+        selectedMpMap = i | 0;
+        const cards = document.querySelectorAll('#mp-maps .map-card');
+        cards.forEach((c) => c.classList.toggle('selected', (c.dataset.i | 0) === selectedMpMap));
+        cards.forEach((c) => { c.style.cursor = isHost ? 'pointer' : 'default'; });
       }
 
       // --- Top départ : construire la piste partagée et placer chaque joueur ---
       function onRaceStart(m) {
         currentMap = m.mapIndex | 0;
+        raceRound = m.round || 1; raceTotal = m.total || 1;
         buildTrack(MAPS[currentMap]);
         spawnRacersMP(m.players);
         document.getElementById('mp-overlay').classList.add('hidden');
@@ -1335,7 +1355,8 @@
         const list = mpRankings();
         const place = list.findIndex((r) => r.me) + 1;
         const titles = ['🏆 VICTOIRE !', '🥈 2ème place', '🥉 3ème place', '4ème', '5ème', '6ème', '7ème', '8ème'];
-        document.getElementById('end-title').textContent = player.finished ? (titles[place - 1] || place + 'ème') : 'Classement';
+        const head = player.finished ? (titles[place - 1] || place + 'ème') : 'Classement';
+        document.getElementById('end-title').textContent = head + '  ·  Manche ' + raceRound + '/' + raceTotal;
         document.getElementById('end-pos').textContent = place + ' / ' + list.length;
         document.getElementById('end-detail').innerHTML = list.map((r, i) => {
           const status = r.finished
@@ -1347,8 +1368,9 @@
         }).join('');
         const restart = document.getElementById('restart-btn');
         const change = document.getElementById('change-btn');
-        restart.textContent = 'Rejouer';
-        change.textContent = 'Changer de circuit';
+        const hasNext = raceRound < raceTotal;
+        restart.textContent = hasNext ? 'Circuit suivant ➡️' : (raceTotal > 1 ? 'Rejouer le Grand Prix 🔁' : 'Rejouer ce circuit 🔁');
+        change.textContent = 'Salon';
         restart.classList.toggle('hidden', !isHost);
         change.classList.toggle('hidden', !isHost);
       }
@@ -1370,9 +1392,10 @@
         document.getElementById('wheel-wrap').classList.add('hidden');
         document.getElementById('mp-overlay').classList.remove('hidden');
         document.getElementById('mp-sub').textContent = isHost
-          ? 'Choisis le circuit, puis lance la course 🏁'
+          ? 'Choisis un circuit puis lance-le 🏁, ou tente le Grand Prix aléatoire 🎲'
           : "En attente que l'hôte lance la course…";
         document.getElementById('mp-start').classList.toggle('hidden', !isHost);
+        document.getElementById('mp-gp').classList.toggle('hidden', !isHost);
         document.getElementById('mp-wait').classList.toggle('hidden', isHost);
         highlightMap(raceMapIndex);
       }
@@ -1397,7 +1420,13 @@
         if (!isHost || !net) return;
         initAudio();
         if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-        net.send({ type: 'race-go' });
+        net.send({ type: 'race-go', single: true, mapIndex: selectedMpMap, maps: MAPS.length });
+      });
+      document.getElementById('mp-gp').addEventListener('click', () => {
+        if (!isHost || !net) return;
+        initAudio();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        net.send({ type: 'race-go', maps: MAPS.length });
       });
 
       // ====================================================================

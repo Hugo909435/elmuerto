@@ -147,6 +147,31 @@ function broadcast(room, payload) {
   }
 }
 
+// Mélange en place (Fisher-Yates) — utilisé pour l'ordre aléatoire des circuits.
+function shuffleInPlace(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Construit le top départ d'une manche : (ré)attribue les places et diffuse
+// race-start avec le circuit courant et le numéro de manche du Grand Prix.
+function startRaceRound(room) {
+  const conn = [...room.players.values()].filter((p) => p.connected);
+  conn.forEach((p, i) => { p.slot = i; p.finished = false; p.finishTime = 0; });
+  room.raceMapIndex = room.raceOrder[room.raceSeq];
+  room.phase = 'racing';
+  broadcast(room, {
+    type: 'race-start',
+    mapIndex: room.raceMapIndex,
+    round: room.raceSeq + 1,
+    total: room.raceOrder.length,
+    players: conn.map((p) => ({ id: p.id, name: p.name, slot: p.slot })),
+  });
+}
+
 function assignRandomTeams(room) {
   const ids = [...room.players.keys()];
   for (let i = ids.length - 1; i > 0; i--) {
@@ -615,21 +640,33 @@ wss.on('connection', (socket) => {
       // L'hôte lance la course : on attribue une place (slot) à chaque joueur
       // connecté et on diffuse le top départ. Chaque client lance son propre
       // décompte 3-2-1 à la réception.
+      // L'hôte lance un Grand Prix : on tire un ordre aléatoire de tous les
+      // circuits et on démarre la première manche. Les manches suivantes sont
+      // enchaînées via « race-next ».
       case 'race-go': {
         const room = currentRoom;
         if (!room || room.hostId !== playerId) return;
-        const conn = [...room.players.values()].filter((p) => p.connected);
-        conn.forEach((p, i) => {
-          p.slot = i;
-          p.finished = false;
-          p.finishTime = 0;
-        });
-        room.phase = 'racing';
-        broadcast(room, {
-          type: 'race-start',
-          mapIndex: room.raceMapIndex,
-          players: conn.map((p) => ({ id: p.id, name: p.name, slot: p.slot })),
-        });
+        const n = Math.max(1, (msg.maps | 0) || 1);
+        if (msg.single) {
+          // Circuit unique choisi par l'hôte : une seule manche sur cette carte.
+          const idx = Math.max(0, Math.min(n - 1, msg.mapIndex | 0));
+          room.raceOrder = [idx];
+        } else {
+          // Grand Prix : tous les circuits dans un ordre aléatoire.
+          room.raceOrder = shuffleInPlace([...Array(n).keys()]);
+        }
+        room.raceSeq = 0;
+        startRaceRound(room);
+        break;
+      }
+
+      // L'hôte passe au circuit suivant du Grand Prix en cours.
+      case 'race-next': {
+        const room = currentRoom;
+        if (!room || room.hostId !== playerId) return;
+        if (!room.raceOrder || room.raceSeq >= room.raceOrder.length - 1) return;
+        room.raceSeq++;
+        startRaceRound(room);
         break;
       }
 

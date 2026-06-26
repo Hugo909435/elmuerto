@@ -189,6 +189,15 @@
       const RESPAWN_DELAY = 1.4;    // s avant réapparition
       const INVULN_TIME = 1.8;      // s d'invincibilité après respawn
 
+      // ---- Zone de jeu rétrécissante (façon battle royale) ----
+      // La carte de départ s'adapte au nombre de joueurs (2 → petite, 8 → pleine
+      // arène), puis rétrécit à chaque élimination. La bande sur le point de
+      // disparaître clignote en rouge pour prévenir avant de devenir mortelle.
+      const MIN_ZONE_W = 1100, MIN_ZONE_H = 700;  // taille minimale (jamais en-dessous)
+      const ZONE_WARN_TIME = 3.0;   // s de clignotement d'alerte avant le rétrécissement
+      const ZONE_ANIM_DUR = 1.8;    // s d'animation du rétrécissement
+      const ZONE_DMG_INTERVAL = 1.1;// s entre deux pertes de vie hors de la zone
+
       // Murs/obstacles de l'arène (mêmes coordonnées pour tout le monde).
       const WALLS = [
         { x: 900, y: 240, w: 400, h: 70 },
@@ -215,6 +224,12 @@
       const ghostBullets = [];       // balles cosmétiques reçues des pairs
       const particles = [];
       let countdown = 0, netAccum = 0;
+
+      // ---- Zone de jeu (rectangle sûr courant + animation/avertissement) ----
+      let safeZone = { x: 0, y: 0, w: ARENA_W, h: ARENA_H };
+      let zoneFrom = null, zoneTo = null, zoneAnimT = 0;   // animation en cours
+      let zoneWarn = 0, zonePending = null;                // alerte avant rétréciss.
+      let lastAliveCount = 0;
 
       function makeTank(id, slot, name, isMe, isBot) {
         const sp = SPAWNS[slot % SPAWNS.length];
@@ -307,6 +322,8 @@
           if (countdown <= 0) { state = 'playing'; $('hint').classList.remove('hidden'); }
         }
 
+        updateZone(dt);
+
         for (const t of tanks.values()) {
           if (t._fireCd > 0) t._fireCd -= dt;
 
@@ -331,6 +348,16 @@
             t.x += (t.tx - t.x) * Math.min(1, 14 * dt);
             t.y += (t.ty - t.y) * Math.min(1, 14 * dt);
             t.angle = lerpAng(t.angle, t.tangle, Math.min(1, 14 * dt));
+          }
+
+          // Dégâts hors zone (seulement mon char / les bots ; les pairs gèrent eux-mêmes).
+          if ((t.isMe || t.isBot) && t.alive && t.invuln <= 0) {
+            if (!inZone(t.x, t.y, 0)) {
+              t.zoneDmgCd = (t.zoneDmgCd || 0) - dt;
+              if (t.zoneDmgCd <= 0) { t.zoneDmgCd = ZONE_DMG_INTERVAL; outOfZoneDamage(t); }
+            } else {
+              t.zoneDmgCd = 0.4; // petit sursis en rentrant dans la zone
+            }
           }
         }
 
@@ -432,9 +459,10 @@
       }
 
       function respawnTank(t) {
-        const sp = SPAWNS[(t.slot + (t.lives % 4)) % SPAWNS.length];
+        const sp = spawnPos(t.slot, t.lives % 4); // toujours à l'intérieur de la zone
         t.x = sp.x; t.y = sp.y; t.tx = sp.x; t.ty = sp.y;
         t.angle = Math.random() * Math.PI * 2; t.alive = true; t.invuln = INVULN_TIME;
+        t.zoneDmgCd = 1.5;
       }
 
       function checkWin() {
@@ -451,10 +479,113 @@
       }
 
       // ====================================================================
+      //  ZONE DE JEU RÉTRÉCISSANTE
+      // ====================================================================
+      // Taille de zone pour un nombre de joueurs en vie (2 → mini, 8 → pleine).
+      function zoneForAlive(n) {
+        const c = Math.max(2, Math.min(8, n));
+        const t = (c - 2) / 6;                       // 0 @2 joueurs … 1 @8 joueurs
+        let w = Math.max(MIN_ZONE_W, ARENA_W * (0.5 + 0.5 * t));
+        let h = Math.max(MIN_ZONE_H, ARENA_H * (0.5 + 0.5 * t));
+        w = Math.min(w, ARENA_W); h = Math.min(h, ARENA_H);
+        return { x: (ARENA_W - w) / 2, y: (ARENA_H - h) / 2, w, h };
+      }
+      function countAliveInMatch() {
+        let n = 0;
+        for (const t of tanks.values()) if (t.lives > 0) n++;
+        return n;
+      }
+      function inZone(x, y, margin) {
+        margin = margin || 0;
+        return x >= safeZone.x + margin && x <= safeZone.x + safeZone.w - margin &&
+               y >= safeZone.y + margin && y <= safeZone.y + safeZone.h - margin;
+      }
+      // Projette un point de l'arène pleine dans la zone sûre courante (garde l'espacement).
+      function zonePoint(ax, ay) {
+        const m = TANK_R + 24;
+        let x = safeZone.x + (ax / ARENA_W) * safeZone.w;
+        let y = safeZone.y + (ay / ARENA_H) * safeZone.h;
+        x = Math.max(safeZone.x + m, Math.min(safeZone.x + safeZone.w - m, x));
+        y = Math.max(safeZone.y + m, Math.min(safeZone.y + safeZone.h - m, y));
+        return { x, y };
+      }
+      function spawnPos(slot, salt) {
+        const sp = SPAWNS[(slot + (salt || 0)) % SPAWNS.length];
+        return zonePoint(sp.x, sp.y);
+      }
+
+      // À lancer au début de chaque manche : zone initiale + placement des chars.
+      function setupZone() {
+        safeZone = zoneForAlive(tanks.size);
+        zoneFrom = zoneTo = zonePending = null;
+        zoneAnimT = 0; zoneWarn = 0;
+        lastAliveCount = countAliveInMatch();
+        for (const t of tanks.values()) {
+          const p = spawnPos(t.slot, 0);
+          t.x = t.tx = p.x; t.y = t.ty = p.y; t.zoneDmgCd = 2.0;
+        }
+      }
+
+      // Programme un rétrécissement vers la taille correspondant aux survivants.
+      function requestShrink(aliveCount) {
+        const target = zoneForAlive(aliveCount);
+        if (target.w >= safeZone.w - 4 && target.h >= safeZone.h - 4) return; // pas plus petit
+        zonePending = target;
+        zoneWarn = ZONE_WARN_TIME;
+        if (me) showToast('⚠️ La zone rétrécit !', '#ff6b6b');
+      }
+
+      function updateZone(dt) {
+        // Une élimination (un char passe à 0 vie) déclenche le rétrécissement.
+        const ac = countAliveInMatch();
+        if (ac < lastAliveCount && ac >= 1) requestShrink(ac);
+        lastAliveCount = ac;
+
+        // Phase d'avertissement : la bande clignote, la zone n'a pas encore bougé.
+        if (zoneWarn > 0) {
+          zoneWarn -= dt;
+          if (zoneWarn <= 0 && zonePending) {
+            zoneFrom = { x: safeZone.x, y: safeZone.y, w: safeZone.w, h: safeZone.h };
+            zoneTo = zonePending; zonePending = null; zoneAnimT = 0;
+          }
+        }
+        // Animation douce du rétrécissement.
+        if (zoneTo) {
+          zoneAnimT = Math.min(1, zoneAnimT + dt / ZONE_ANIM_DUR);
+          const a = zoneAnimT;
+          const k = a < 0.5 ? 2 * a * a : 1 - Math.pow(-2 * a + 2, 2) / 2; // easeInOut
+          safeZone = {
+            x: zoneFrom.x + (zoneTo.x - zoneFrom.x) * k,
+            y: zoneFrom.y + (zoneTo.y - zoneFrom.y) * k,
+            w: zoneFrom.w + (zoneTo.w - zoneFrom.w) * k,
+            h: zoneFrom.h + (zoneTo.h - zoneFrom.h) * k,
+          };
+          if (zoneAnimT >= 1) { safeZone = zoneTo; zoneFrom = zoneTo = null; }
+        }
+      }
+
+      // Perte de vie pour un char resté hors de la zone.
+      function outOfZoneDamage(t) {
+        if (!t.alive || t.invuln > 0) return;
+        t.lives -= 1; t.alive = false; t.respawn = RESPAWN_DELAY;
+        spawnExplosion(t.x, t.y, '#ff2d2d');
+        renderHud();
+        if (t.isMe) showToast(t.lives > 0 ? '🔥 Hors zone !' : '☠️ Avalé par la zone',
+                              t.lives > 0 ? '#ff6b6b' : '#ef4444');
+      }
+
+      // ====================================================================
       //  IA (bots du mode solo)
       // ====================================================================
       function updateBot(t, dt) {
         if (t._fireCd === undefined) t._fireCd = 0;
+        // Hors zone : le bot fonce vers le centre pour ne pas se faire avaler.
+        if (!inZone(t.x, t.y, 60)) {
+          const cx = safeZone.x + safeZone.w / 2, cy = safeZone.y + safeZone.h / 2;
+          t.angle = lerpAng(t.angle, Math.atan2(cy - t.y, cx - t.x), Math.min(1, 6 * dt));
+          moveForward(t, dt);
+          return;
+        }
         t.aiTimer -= dt; t.aiFire -= dt;
         if (t.aiTimer <= 0) {
           t.aiTimer = 0.5 + Math.random() * 1.2;
@@ -533,6 +664,9 @@
           ctx.strokeRect(w.x, w.y, w.w, w.h);
         }
 
+        // Zone de jeu : extérieur dangereux + bande clignotante + bordure
+        drawDangerZone();
+
         // Balles
         for (const b of bullets) drawBullet(b);
         for (const b of ghostBullets) drawBullet(b);
@@ -547,6 +681,38 @@
           ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
         }
         ctx.globalAlpha = 1;
+      }
+
+      // Remplit toute l'arène SAUF le rectangle `zone` (les 4 bandes extérieures).
+      function fillOutside(zone, style) {
+        ctx.fillStyle = style;
+        ctx.fillRect(0, 0, ARENA_W, zone.y);                                   // haut
+        ctx.fillRect(0, zone.y + zone.h, ARENA_W, ARENA_H - (zone.y + zone.h));// bas
+        ctx.fillRect(0, zone.y, zone.x, zone.h);                               // gauche
+        ctx.fillRect(zone.x + zone.w, zone.y, ARENA_W - (zone.x + zone.w), zone.h); // droite
+      }
+
+      function drawDangerZone() {
+        const now = performance.now();
+        // Zone hors-jeu actuelle (rouge sombre).
+        fillOutside(safeZone, 'rgba(120,15,15,0.55)');
+        // Bande sur le point de disparaître : clignote pendant l'avertissement.
+        if (zoneWarn > 0 && zonePending) {
+          const a = 0.18 + 0.30 * (0.5 + 0.5 * Math.sin(now / 110));
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(safeZone.x, safeZone.y, safeZone.w, safeZone.h);
+          ctx.clip(); // ne teinte que l'intérieur de la zone sûre actuelle
+          fillOutside(zonePending, 'rgba(255,45,45,' + a.toFixed(3) + ')');
+          ctx.restore();
+        }
+        // Bordure animée de la zone sûre.
+        ctx.strokeStyle = (zoneWarn > 0) ? 'rgba(255,80,80,0.9)' : 'rgba(255,210,90,0.8)';
+        ctx.lineWidth = 4;
+        ctx.setLineDash([18, 14]);
+        ctx.lineDashOffset = -((now / 30) % 32);
+        ctx.strokeRect(safeZone.x + 2, safeZone.y + 2, safeZone.w - 4, safeZone.h - 4);
+        ctx.setLineDash([]);
       }
 
       function drawBullet(b) {
@@ -692,6 +858,7 @@
           b._fireCd = 0;
           tanks.set(b.id, b);
         }
+        setupZone();
         startCountdown();
       }
 
@@ -779,6 +946,7 @@
           if (e.id === myId) me = t;
         }
         if (!me) { me = makeTank(myId, 0, MY_NAME, true, false); tanks.set(myId, me); }
+        setupZone();
         startCountdown();
       }
 
