@@ -104,6 +104,18 @@
       .btn:active { transform: scale(0.96); }
       .btn.hidden { display: none; }
       .row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+      .score-note {
+        background: rgba(255,226,122,0.10);
+        border: 1px solid rgba(255,226,122,0.28);
+        border-radius: 12px;
+        padding: 10px 18px;
+        font-size: clamp(13px, 3.5vw, 15px);
+        max-width: 420px;
+        line-height: 1.5;
+        text-align: center;
+        color: #ffe27a;
+        margin-bottom: 4px;
+      }
 
       ul#mp-players { list-style: none; width: 100%; max-width: 340px; margin-bottom: 16px; }
       .player { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
@@ -158,6 +170,8 @@
     <!-- Salle d'attente multijoueur -->
     <div id="mp-overlay" class="overlay hidden">
       <h1>⚡ Chargé !</h1>
+      <p>Maintiens ton doigt appuyé pour charger ton énergie et propulse ton personnage. Élimine les adversaires en les touchant — le dernier survivant gagne&nbsp;!</p>
+      <div class="score-note" style="margin-bottom:4px">🏆 <b>Score :</b> (N − rang) × 100 pts selon ta survie. Le dernier survivant remporte le plus de points !</div>
       <p id="mp-sub">Connexion à la partie…</p>
       <ul id="mp-players"></ul>
       <p id="mp-wait" style="opacity:.7">En attente des autres joueurs…</p>
@@ -169,7 +183,8 @@
       <p>Le <b>chargé</b> brille et va plus vite : il doit <b>percuter</b> un autre joueur pour lui refiler la charge.<br />
       Les autres <b>tirent pour le repousser</b>. Au bout de <b>20 s</b>, le chargé est <b>éliminé</b> !<br />
       <b>Joystick</b> à gauche pour viser, <b>Avance</b> pour foncer, <b>Tir</b> pour repousser.</p>
-      <button id="start-btn" class="btn">Jouer contre des bots</button>
+      <div class="score-note">🏆 <b>Score :</b> chaque joueur marque (N − rang) × 100 pts selon sa survie. Le dernier survivant remporte le plus de points — refile vite la charge aux autres !</div>
+      <button id="start-btn" class="btn">Je suis prêt&nbsp;!</button>
     </div>
 
     <!-- Attente résultats (MP) -->

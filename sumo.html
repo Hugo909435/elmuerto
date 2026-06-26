@@ -69,6 +69,18 @@
       .btn.ghost { background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
       .btn.hidden { display: none; }
       .row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+      .score-note {
+        background: rgba(255,226,122,0.10);
+        border: 1px solid rgba(255,226,122,0.28);
+        border-radius: 12px;
+        padding: 10px 18px;
+        font-size: clamp(13px, 3.5vw, 15px);
+        max-width: 420px;
+        line-height: 1.5;
+        text-align: center;
+        color: #ffe27a;
+        margin-bottom: 4px;
+      }
 
       ul#mp-players { list-style: none; width: 100%; max-width: 340px; margin-bottom: 16px; }
       .player { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
@@ -111,6 +123,8 @@
     <!-- Salle d'attente multijoueur -->
     <div id="mp-overlay" class="overlay hidden">
       <h1>🤼 Sumo du salon</h1>
+      <p>Pousse les autres sumos hors de l'arène à l'aide de ton joystick. Reste le dernier dans le cercle pour remporter la manche&nbsp;!</p>
+      <div class="score-note" style="margin-bottom:4px">🏆 <b>Score :</b> le dernier sumo debout dans l'arène gagne la manche. Plus tu tiens longtemps, mieux tu t'en sors&nbsp;!</div>
       <p id="mp-sub">Connexion à la salle d'attente…</p>
       <ul id="mp-players"></ul>
       <button id="mp-start" class="btn hidden">Lancer le combat 🤼</button>
@@ -121,7 +135,8 @@
     <div id="start-overlay" class="overlay hidden">
       <h1>🤼 EL MUERTO SUMO</h1>
       <p>Ton sumo <b>tourne tout seul</b> sur lui-même quand tu ne touches rien.<br /><b>Maintiens</b> l'écran pour <b>foncer tout droit</b> et <b>pousser</b> les autres hors du cercle.<br />Dernier sumo dans l'arène gagne&nbsp;!</p>
-      <button id="start-btn" class="btn">Jouer contre des bots</button>
+      <div class="score-note">🏆 <b>Victoire :</b> le dernier sumo debout dans l'arène gagne la manche. Chaque fois qu'un adversaire tombe hors du ring, tu gagnes du terrain au classement !</div>
+      <button id="start-btn" class="btn">Je suis prêt&nbsp;!</button>
     </div>
 
     <!-- Fin de manche -->

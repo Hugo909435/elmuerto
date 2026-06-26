@@ -127,6 +127,18 @@
         background: #b91c1c; color: #fff; padding: 12px 22px; border-radius: 12px;
         font-size: 14px; font-weight: 600; z-index: 100; max-width: 90vw; text-align: center;
       }
+      .score-note {
+        background: rgba(255,226,122,0.10);
+        border: 1px solid rgba(255,226,122,0.28);
+        border-radius: 12px;
+        padding: 10px 18px;
+        font-size: clamp(13px, 3.5vw, 15px);
+        max-width: 460px;
+        line-height: 1.5;
+        text-align: center;
+        color: #ffe27a;
+        margin-top: 4px;
+      }
     </style>
   </head>
   <body>
@@ -174,6 +186,7 @@
       <p>La voiture accélère seule : tourne le <b>volant</b>, tape un côté de l'écran ou ⬅️➡️. Choisis ton circuit !</p>
       <div id="map-cards"></div>
       <p style="opacity:0.6;font-size:13px">Embranchement · obstacles : boue, sable, glace, huile, rochers… 3 tours, 4 voitures.</p>
+      <div class="score-note">🏆 <b>Score :</b> ta position finale détermine tout — 1er = victoire ! Évite les obstacles et prends les bons embranchements pour gagner du temps.</div>
     </div>
 
     <div id="end-overlay" class="overlay hidden">
@@ -190,6 +203,8 @@
     <!-- Salle d'attente multijoueur (course à plusieurs depuis le lobby) -->
     <div id="mp-overlay" class="overlay hidden">
       <h1>🏎️ Course du salon</h1>
+      <p>Pilote ta voiture avec le joystick. Évite les obstacles et les murs. Le premier à boucler le circuit gagne&nbsp;!</p>
+      <div class="score-note" style="margin-top:4px;margin-bottom:4px">🏆 <b>Score :</b> ta position finale détermine tout — 1er = victoire ! Évite les obstacles pour ne pas perdre de temps.</div>
       <p id="mp-sub">Connexion à la salle d'attente…</p>
       <ul id="mp-players"></ul>
       <div id="mp-maps"></div>

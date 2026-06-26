@@ -161,24 +161,54 @@
       }
       .btn:active { transform: scale(0.95); }
 
-      /* ---- Aperçu des 5 couleurs ---- */
-      #preview-swatches {
-        display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;
+      /* ---- Overlay règles + prêt (MP) ---- */
+      #mp-ready-list {
+        display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
         margin: 4px 0;
       }
-      .preview-chip {
-        display: flex; flex-direction: column; align-items: center; gap: 6px;
+      .mp-ready-chip {
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 12px; padding: 10px 16px; min-width: 64px;
       }
-      .preview-chip .pc-swatch {
-        width: 54px; height: 54px; border-radius: 14px;
-        border: 3px solid rgba(255,255,255,0.8);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      .mp-ready-icon { font-size: 22px; }
+      .mp-ready-chip .mp-rname { font-size: 12px; font-weight: 600; }
+
+      /* ---- Score inter-manche (MP) ---- */
+      #mp-round-score-overlay { justify-content: flex-start; padding-top: max(48px, env(safe-area-inset-top)); gap: 10px; }
+      #mrs-title { font-size: clamp(20px, 6vw, 34px); }
+      #mrs-list { width: 100%; max-width: 380px; }
+      .mrs-entry {
+        display: flex; align-items: center; gap: 12px;
+        padding: 10px 14px; border-radius: 12px;
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.1);
+        margin-bottom: 8px;
       }
-      .preview-chip .pc-num {
-        font-size: 12px; font-weight: 700; opacity: 0.8;
+      .mrs-photo, .mrs-photo-ph {
+        width: 54px; height: 54px; border-radius: 10px; flex-shrink: 0;
+        object-fit: cover; border: 2px solid rgba(255,255,255,0.25);
       }
-      .preview-chip .pc-name {
-        font-size: 10px; opacity: 0.65; text-transform: capitalize; text-align: center; max-width: 60px;
+      .mrs-photo-ph { background: rgba(255,255,255,0.1); }
+      .mrs-name { flex: 1; font-weight: 700; font-size: 14px; text-align: left; }
+      .mrs-me { font-size: 11px; opacity: 0.6; font-weight: 400; }
+      .mrs-pts { font-size: 20px; font-weight: 900; color: #ffe27a; flex-shrink: 0; }
+      #mrs-countdown { font-size: 16px; opacity: 0.7; }
+
+      /* ---- Indicateur "photo prise" (non-bloquant) ---- */
+      #mp-captured-bar {
+        position: fixed;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 140px);
+        left: 50%; transform: translateX(-50%);
+        background: rgba(0,0,0,0.82);
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 24px;
+        padding: 10px 22px;
+        font-size: 14px; font-weight: 600;
+        z-index: 9; color: #fff;
+        text-align: center; white-space: nowrap;
+        pointer-events: none;
       }
 
       /* ---- Reveal couleur avant chaque round ---- */
@@ -215,14 +245,13 @@
       /* ---- MP wait après photo ---- */
       .mp-waiting-icon { font-size: 52px; }
       .mp-sub { font-size: 15px; opacity: 0.75; }
-      #mp-score-photo { width: min(58vw, 240px); height: min(58vw, 240px); object-fit: cover; border-radius: 14px; border: 3px solid rgba(255,255,255,0.2); display: block; }
 
       /* ---- Reveal scores final ---- */
       #score-reveal-overlay { justify-content: flex-start; padding-top: max(48px, env(safe-area-inset-top)); gap: 12px; }
       #reveal-title { font-size: clamp(26px, 7vw, 44px); }
-      #reveal-list { width: 100%; max-width: 400px; flex: 1; overflow-y: auto; }
+      #reveal-list { width: 100%; max-width: 420px; flex: 1; overflow-y: auto; }
       .rp-entry {
-        display: flex; align-items: center; gap: 12px;
+        display: flex; flex-direction: column; gap: 6px;
         padding: 12px 16px; border-radius: 14px;
         background: rgba(255,255,255,0.07);
         border: 1px solid rgba(255,255,255,0.1);
@@ -232,9 +261,14 @@
       }
       .rp-entry.visible { transform: translateY(0); opacity: 1; }
       .rp-entry.winner { background: rgba(255,226,122,0.12); border-color: rgba(255,226,122,0.35); }
-      .rp-rank { font-size: 26px; width: 34px; text-align: center; }
+      .rp-header { display: flex; align-items: center; gap: 12px; }
+      .rp-rank { font-size: 26px; width: 34px; text-align: center; flex-shrink: 0; }
       .rp-name { flex: 1; font-weight: 700; font-size: 15px; text-align: left; }
-      .rp-score { font-size: 20px; font-weight: 900; color: #ffe27a; }
+      .rp-me { font-size: 11px; opacity: 0.65; font-weight: 400; }
+      .rp-score { font-size: 20px; font-weight: 900; color: #ffe27a; flex-shrink: 0; }
+      .rp-breakdown { font-size: 12px; opacity: 0.65; padding-left: 46px; }
+      .rp-photos { display: flex; gap: 6px; padding-left: 46px; flex-wrap: wrap; margin-top: 2px; }
+      .rp-photo-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25); }
 
       /* ---- Solo result / end ---- */
       #result-photo { width: min(68vw, 300px); height: min(68vw, 300px); object-fit: cover; border-radius: 16px; border: 3px solid rgba(255,255,255,0.2); display: block; }
@@ -249,6 +283,17 @@
       .err { color: #ff8a8a; }
 
       .hidden { display: none !important; }
+      .score-note {
+        background: rgba(255,226,122,0.10);
+        border: 1px solid rgba(255,226,122,0.28);
+        border-radius: 12px;
+        padding: 10px 18px;
+        font-size: clamp(13px, 3.5vw, 15px);
+        max-width: 420px;
+        line-height: 1.5;
+        text-align: center;
+        color: #ffe27a;
+      }
     </style>
   </head>
   <body>
@@ -282,12 +327,25 @@
     <!-- Shutter -->
     <button id="shutter" class="hidden" aria-label="Photo"></button>
 
-    <!-- Aperçu des 5 couleurs (MP, au début) -->
-    <div id="color-preview-overlay" class="overlay hidden">
-      <h1 id="preview-title">🎨 Les 5 cibles</h1>
-      <p id="preview-sub">Cherche ces couleurs autour de toi !</p>
-      <div id="preview-swatches"></div>
-      <p id="preview-countdown" style="font-size:32px;font-weight:900;opacity:0.85;">Début dans <span id="preview-secs">5</span>s</p>
+    <!-- Indicateur photo prise (non-bloquant, MP) -->
+    <div id="mp-captured-bar" class="hidden">
+      <span id="mp-captured-msg">📷 Photo prise — attente des autres</span>
+    </div>
+
+    <!-- Règles + prêt (MP) -->
+    <div id="mp-rules-overlay" class="overlay hidden">
+      <h1>🎨 Color Hunt</h1>
+      <p>Une couleur apparaît. Trouve quelque chose de cette couleur autour de toi et prends la photo. Plus c'est précis et rapide, plus tu marques de points !</p>
+      <div class="score-note">🏆 <b>Score :</b> jusqu'à 100 pts par manche selon la précision (ΔE couleur). En multijoueur, un bonus vitesse de 10 pts est ajouté pour les plus rapides !</div>
+      <div id="mp-ready-list"></div>
+      <button id="mp-ready-btn" class="btn">Je suis prêt !</button>
+    </div>
+
+    <!-- Score inter-manche (MP) -->
+    <div id="mp-round-score-overlay" class="overlay hidden">
+      <h1 id="mrs-title">Manche <span id="mrs-round">1</span></h1>
+      <div id="mrs-list"></div>
+      <p id="mrs-countdown"></p>
     </div>
 
     <!-- Reveal couleur (avant chaque round) -->
@@ -297,25 +355,11 @@
       <div id="reveal-countdown"></div>
     </div>
 
-    <!-- Solo: start -->
-    <div id="start-overlay" class="overlay">
-      <h1>🎨 Color Hunt</h1>
-      <p>Une couleur s'affiche. Pointe ta caméra vers quelque chose de cette couleur et prends la photo. Plus c'est précis et rapide, plus tu marques de points !</p>
-      <button id="start-btn" class="btn">Activer la caméra</button>
-    </div>
-
     <!-- MP: attente connexion -->
     <div id="mp-wait-overlay" class="overlay hidden">
       <div class="mp-waiting-icon">📡</div>
       <h1>En attente…</h1>
       <p id="mp-wait-msg" class="mp-sub">Connexion…</p>
-    </div>
-
-    <!-- MP: photo prise, attente des autres -->
-    <div id="mp-score-wait-overlay" class="overlay hidden">
-      <canvas id="mp-score-photo"></canvas>
-      <h1>📷 Photo prise !</h1>
-      <p id="mp-score-wait-msg" class="mp-sub">En attente des autres…</p>
     </div>
 
     <!-- Reveal scores final (MP) -->

@@ -188,20 +188,27 @@ function renderScoreboard(players, scores, teamsMap) {
   });
 }
 
-function renderTournamentScores(players, scores, teamsMap) {
+function renderTournamentScores(players, scores, teamsMap, gameWins) {
   const el = $('tournament-scores');
   if (!el) return;
-  const sorted = [...players].sort((a, b) => (scores[b.id] ?? 0) - (scores[a.id] ?? 0));
+  // Sort ascending: dernier en haut, 1er en bas (révélation dramatique)
+  const sorted = [...players].sort((a, b) => (scores[a.id] ?? 0) - (scores[b.id] ?? 0));
   el.innerHTML = '';
   sorted.forEach((p, i) => {
+    const rank = sorted.length - i; // rang réel (1 = premier)
     const div = document.createElement('div');
-    div.className = 'score-entry';
+    div.className = 'score-entry' + (rank === 1 ? ' rank-first' : '');
+    div.style.animationDelay = `${i * 0.18}s`;
+    div.classList.add('reveal');
     const team = teamsMap ? teamsMap[p.id] : null;
     const teamBadge = team ? `<span class="score-team-badge t${team}">${team === 1 ? '🔴' : '🔵'}</span>` : '';
+    const wins = (gameWins || {})[p.id] || [];
+    const winBadges = wins.map(w => `<span class="game-win-badge" title="${escapeHtml(w.gameLabel)}">${w.gameEmoji}</span>`).join('');
     div.innerHTML = `
-      <span class="score-rank">${MEDALS[i] || (i + 1) + '.'}</span>
+      <span class="score-rank">${MEDALS[rank - 1] || rank + '.'}</span>
       <span class="score-name">${escapeHtml(p.name)}</span>
       ${teamBadge}
+      ${winBadges ? `<span class="game-win-badges">${winBadges}</span>` : ''}
       <span class="score-pts">${scores[p.id] ?? 0} pts</span>
     `;
     el.appendChild(div);
@@ -315,7 +322,7 @@ net
     showView(views.tournament);
     const sub = m.totalRounds === 1 ? '1 manche' : `${m.totalRounds} manches`;
     $('tournament-sub').textContent = `Classement final — ${sub}`;
-    renderTournamentScores(m.players, m.totalScores, m.teamsMap);
+    renderTournamentScores(m.players, m.totalScores, m.teamsMap, m.gameWins);
   })
 
   .on('error', m => setError(m.message || 'Erreur.'))

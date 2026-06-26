@@ -26,6 +26,59 @@ const GAMES = [
 
 const SEGMENT_COLORS = ['#4ade80', '#38bdf8', '#22a85a', '#0ea5e9', '#a78bfa', '#f59e0b'];
 
+const COLOR_PALETTE = [
+  { name: 'Blanc',            hex: '#FFFFFF' },
+  { name: 'Noir',             hex: '#000000' },
+  { name: 'Gris Clair',       hex: '#D9D9D9' },
+  { name: 'Gris Foncé',       hex: '#555555' },
+  { name: 'Rouge',            hex: '#FF0000' },
+  { name: 'Rouge Bordeaux',   hex: '#7B1E3A' },
+  { name: 'Rouge Brique',     hex: '#B5533C' },
+  { name: 'Rose',             hex: '#FFC0CB' },
+  { name: 'Rose Fuchsia',     hex: '#FF4FA3' },
+  { name: 'Orange',           hex: '#FFA500' },
+  { name: 'Orange Brûlé',    hex: '#CC5500' },
+  { name: 'Jaune',            hex: '#FFFF00' },
+  { name: 'Jaune Moutarde',   hex: '#D4A017' },
+  { name: 'Beige',            hex: '#F5F5DC' },
+  { name: 'Crème',            hex: '#FFFDD0' },
+  { name: 'Marron',           hex: '#8B4513' },
+  { name: 'Marron Chocolat',  hex: '#5A3825' },
+  { name: 'Taupe',            hex: '#8B7D6B' },
+  { name: 'Bleu Ciel',        hex: '#90D5FF' },
+  { name: 'Bleu Foncé',       hex: '#111184' },
+  { name: 'Bleu Marine',      hex: '#001F54' },
+  { name: 'Bleu Turquoise',   hex: '#40E0D0' },
+  { name: 'Bleu Pétrole',    hex: '#1F6F78' },
+  { name: 'Vert',             hex: '#00A651' },
+  { name: 'Vert Clair',       hex: '#90EE90' },
+  { name: 'Vert Foncé',       hex: '#1E5631' },
+  { name: 'Vert Olive',       hex: '#708238' },
+  { name: 'Vert Menthe',      hex: '#98FF98' },
+  { name: 'Vert Kaki',        hex: '#8F9779' },
+  { name: 'Violet',           hex: '#8000FF' },
+  { name: 'Violet Lavande',   hex: '#B57EDC' },
+  { name: 'Lilas',            hex: '#C8A2C8' },
+  { name: 'Mauve',            hex: '#A060A0' },
+  { name: 'Cyan',             hex: '#00FFFF' },
+  { name: 'Aqua',             hex: '#7FFFD4' },
+  { name: 'Turquoise Clair',  hex: '#AFEEEE' },
+  { name: 'Corail',           hex: '#FF7F50' },
+  { name: 'Saumon',           hex: '#FA8072' },
+  { name: 'Pêche',           hex: '#FFDAB9' },
+  { name: 'Or',               hex: '#D4AF37' },
+  { name: 'Argent',           hex: '#C0C0C0' },
+  { name: 'Bronze',           hex: '#CD7F32' },
+  { name: 'Ivoire',           hex: '#FFFFF0' },
+  { name: 'Bordeaux Sombre',  hex: '#5E0B15' },
+  { name: 'Prune',            hex: '#701C3A' },
+  { name: 'Terracotta',       hex: '#C96A4A' },
+  { name: 'Sable',            hex: '#CDB79E' },
+  { name: 'Ardoise',          hex: '#708090' },
+  { name: 'Indigo',           hex: '#4B0082' },
+  { name: 'Anis',             hex: '#DFFF00' },
+];
+
 function buildWheel() {
   const slices = [];
   const reps = Math.max(2, Math.ceil(6 / GAMES.length));
@@ -352,20 +405,14 @@ wss.on('connection', (socket) => {
               scores: room.scores ?? {},
             });
           } else if (room.gameConnectedSet.size >= room.players.size) {
-            // Tous connectés : générer 5 cibles réparties sur la roue chromatique (pas de doublons)
+            // Tous connectés : tirer 5 couleurs sans répétition depuis la palette
             const CH_ROUNDS = 5;
-            const segSize = 360 / CH_ROUNDS;
-            const baseHue = Math.floor(Math.random() * segSize);
-            const targets = Array.from({ length: CH_ROUNDS }, (_, i) => ({
-              hue: Math.round((baseHue + i * segSize + (Math.random() * 20 - 10) + 360) % 360),
-              sat: parseFloat((0.70 + Math.random() * 0.25).toFixed(3)), // couleurs vives
-              light: parseFloat((0.42 + Math.random() * 0.14).toFixed(3)),
-            }));
-            // Mélanger l'ordre pour que la manche 1 ne soit pas toujours la même teinte
-            for (let i = CH_ROUNDS - 1; i > 0; i--) {
+            const shuffled = [...COLOR_PALETTE];
+            for (let i = shuffled.length - 1; i > 0; i--) {
               const j = Math.floor(Math.random() * (i + 1));
-              [targets[i], targets[j]] = [targets[j], targets[i]];
+              [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
             }
+            const targets = shuffled.slice(0, CH_ROUNDS).map(({ name, hex }) => ({ name, hex }));
             room.colorTargets = targets;
             broadcast(room, {
               type: 'color-targets',
@@ -392,6 +439,12 @@ wss.on('connection', (socket) => {
         const score = Math.max(0, Math.min(10000, parseInt(msg.score) || 0));
         if (!room.pendingScores) room.pendingScores = {};
         room.pendingScores[playerId] = score;
+        if (Array.isArray(msg.roundBreakdown)) {
+          if (!room.pendingBreakdowns) room.pendingBreakdowns = {};
+          room.pendingBreakdowns[playerId] = msg.roundBreakdown
+            .slice(0, 10)
+            .map(n => Math.max(0, Math.min(100, parseInt(n) || 0)));
+        }
         room.scores[playerId] = (room.scores[playerId] ?? 0) + score;
 
         const connectedNow = new Set(
@@ -408,10 +461,27 @@ wss.on('connection', (socket) => {
 
         const allIn = [...connectedNow].every(id => room.pendingScores[id] !== undefined);
         if (allIn) {
+          // Track who won this round
+          const maxScore = Math.max(...Object.values(room.pendingScores));
+          if (maxScore > 0) {
+            const winners = Object.entries(room.pendingScores)
+              .filter(([, s]) => s === maxScore)
+              .map(([id]) => id);
+            const currentGame = room.wheel ? room.wheel[room.resultIndex] : null;
+            if (currentGame) {
+              if (!room.gameWins) room.gameWins = {};
+              for (const wid of winners) {
+                if (!room.gameWins[wid]) room.gameWins[wid] = [];
+                room.gameWins[wid].push({ gameId: currentGame.id, gameLabel: currentGame.label, gameEmoji: currentGame.emoji });
+              }
+            }
+          }
+
           const hasMore = room.currentRound < room.config.rounds;
           broadcast(room, {
             type: 'round-complete',
             roundScores: { ...room.pendingScores },
+            roundBreakdowns: room.pendingBreakdowns ? { ...room.pendingBreakdowns } : null,
             totalScores: { ...room.scores },
             hasMore,
             round: room.currentRound,
@@ -420,6 +490,7 @@ wss.on('connection', (socket) => {
             teamsMap: room.teamsMap ?? null,
           });
           room.pendingScores = {};
+          room.pendingBreakdowns = {};
         }
         break;
       }
@@ -460,6 +531,7 @@ wss.on('connection', (socket) => {
               players: publicPlayers(room),
               teamsMap: room.teamsMap ?? null,
               totalRounds: room.config.rounds,
+              gameWins: room.gameWins ?? {},
             });
           } else {
             broadcastRoulette(room);

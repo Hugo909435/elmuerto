@@ -127,6 +127,23 @@
       .rp-score { font-size: 20px; font-weight: 900; color: #ffe27a; }
 
       .hidden { display: none !important; }
+      .score-note {
+        background: rgba(255,226,122,0.10);
+        border: 1px solid rgba(255,226,122,0.28);
+        border-radius: 12px;
+        padding: 10px 18px;
+        font-size: clamp(13px, 3.5vw, 15px);
+        max-width: 420px;
+        line-height: 1.5;
+        text-align: center;
+        color: #ffe27a;
+      }
+      #mp-ready-list { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin: 4px 0; }
+      .mp-ready-chip { display: flex; flex-direction: column; align-items: center; gap: 4px;
+        background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 12px; padding: 10px 16px; min-width: 64px; }
+      .mp-ready-icon { font-size: 22px; }
+      .mp-ready-chip .mp-rname { font-size: 12px; font-weight: 600; }
     </style>
   </head>
   <body>
@@ -157,7 +174,8 @@
     <div id="start-overlay" class="overlay">
       <h1>🐔 Chicken Run</h1>
       <p>Ton poulet court tout seul. Tape l'écran pour le faire passer du sol au plafond et éviter les obstacles&nbsp;: à chaque obstacle touché, tu ralentis. Premier à la ligne d'arrivée gagne&nbsp;!</p>
-      <button id="start-btn" class="btn">C'est parti&nbsp;!</button>
+      <div class="score-note">🏆 <b>Score :</b> jusqu'à 1000 pts. Arrive en 7 s ou moins pour le maximum — chaque seconde supplémentaire retire 60 pts (minimum 100 pts). Évite les obstacles !</div>
+      <button id="start-btn" class="btn">Je suis prêt&nbsp;!</button>
     </div>
 
     <!-- Solo: résultat -->
@@ -187,6 +205,15 @@
       <h1 id="reveal-title">🏆 Classement</h1>
       <div id="reveal-list"></div>
       <button id="reveal-continue-btn" class="btn hidden">Retour au lobby →</button>
+    </div>
+
+    <!-- MP: règles + prêt -->
+    <div id="mp-rules-overlay" class="overlay hidden">
+      <h1>🐔 Chicken Run</h1>
+      <p>Ton poulet court tout seul. Tape l'écran pour passer du sol au plafond et éviter les obstacles. Le plus rapide gagne&nbsp;!</p>
+      <div class="score-note">🏆 <b>Score :</b> jusqu'à 1000 pts. Arrive en 7 s ou moins pour le maximum — chaque seconde supplémentaire retire 60 pts (minimum 100 pts).</div>
+      <div id="mp-ready-list"></div>
+      <button id="mp-ready-btn" class="btn">Je suis prêt&nbsp;!</button>
     </div>
 
     <script>
@@ -562,6 +589,8 @@
       // =====================================================
       let ws = null;
       let mpTotal = 0;
+      let mpPlayers = [];
+      let mpReadySet = new Set();
       let stateSentAt = 0;
 
       function mpSend(payload) {
@@ -579,6 +608,27 @@
         runners = players.map((p, i) => makeRunner(p.id, p.name, LANE_COLORS[i % LANE_COLORS.length]));
         me = runners.find(r => r.id === myId) || runners[0];
         mpTotal = players.length;
+        mpPlayers = players;
+      }
+
+      function mpUpdateReadyUI() {
+        const list = $('mp-ready-list');
+        if (!list) return;
+        list.innerHTML = '';
+        mpPlayers.forEach(p => {
+          const ready = mpReadySet.has(p.id);
+          const chip = document.createElement('div');
+          chip.className = 'mp-ready-chip';
+          chip.innerHTML = `<span class="mp-ready-icon">${ready ? '✅' : '⏳'}</span><span class="mp-rname">${escapeHtml(p.name.substring(0, 10))}</span>`;
+          list.appendChild(chip);
+        });
+      }
+
+      function mpCheckAllReady() {
+        if (mpPlayers.length > 0 && mpReadySet.size >= mpPlayers.length) {
+          hide($('mp-rules-overlay'));
+          startCountdown();
+        }
       }
 
       let mpStarted = false;
@@ -587,7 +637,8 @@
         if (connectedCount >= mpTotal && mpTotal > 0) {
           mpStarted = true;
           hide($('mp-wait-overlay'));
-          startCountdown();
+          mpUpdateReadyUI();
+          show($('mp-rules-overlay'));
         }
       }
 
@@ -613,6 +664,10 @@
               if (typeof d.l === 'number') { r.vis = d.l; r.lane = d.l > 0.5 ? 1 : 0; }
             } else if (d.type === 'chick-fin') {
               r.finished = true; r.pos = TRACK_LEN; r.time = d.t;
+            } else if (d.type === 'chick-ready') {
+              mpReadySet.add(msg.from);
+              mpUpdateReadyUI();
+              mpCheckAllReady();
             }
             break;
           }
@@ -690,6 +745,14 @@
         hide($('start-overlay'));
         show($('mp-wait-overlay'));
         $('mp-wait-msg').textContent = 'Connexion en cours…';
+        $('mp-ready-btn').addEventListener('click', () => {
+          $('mp-ready-btn').disabled = true;
+          $('mp-ready-btn').textContent = '✅ Prêt !';
+          mpReadySet.add(myId);
+          mpUpdateReadyUI();
+          mpSend({ type: 'relay', data: { type: 'chick-ready' } });
+          mpCheckAllReady();
+        });
         mpConnect();
       }
     })();

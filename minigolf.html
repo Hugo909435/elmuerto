@@ -152,6 +152,17 @@
         font-weight: 800;
         color: #ffe27a;
       }
+      .score-note {
+        background: rgba(255,226,122,0.10);
+        border: 1px solid rgba(255,226,122,0.28);
+        border-radius: 12px;
+        padding: 10px 18px;
+        font-size: clamp(13px, 3.5vw, 15px);
+        max-width: 420px;
+        line-height: 1.5;
+        text-align: center;
+        color: #ffe27a;
+      }
       .btn {
         pointer-events: auto;
         cursor: pointer;
@@ -197,7 +208,8 @@
         Un coup faible roule au sol, un coup puissant envoie la balle en cloche
         par-dessus les murs. Rentre-la dans le trou en un minimum de coups !
       </p>
-      <button id="start-btn" class="btn">Jouer</button>
+      <div class="score-note">🏆 <b>Score :</b> moins de coups = mieux ! Chaque trou te donne un score selon le nombre de frappes. Essaie le coup parfait en un seul tir !</div>
+      <button id="start-btn" class="btn">Je suis prêt&nbsp;!</button>
     </div>
 
     <!-- Win overlay -->

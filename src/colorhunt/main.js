@@ -1,6 +1,6 @@
 import { CameraManager } from './camera.js';
 import { Game } from './game.js';
-import { rgbToCss, hslToRgb, colorName } from './color.js';
+import { rgbToCss, hexToRgb } from './color.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -17,22 +17,26 @@ const els = {
   timerBarWrap:      $('timer-bar-wrap'),
   timerBar:          $('timer-bar'),
   playersBar:        $('players-bar'),
-  // Aperçu 5 couleurs
-  colorPreviewOverlay: $('color-preview-overlay'),
-  previewSwatches:     $('preview-swatches'),
-  previewSecs:         $('preview-secs'),
+  // Indicateur photo prise
+  mpCapturedBar:  $('mp-captured-bar'),
+  mpCapturedMsg:  $('mp-captured-msg'),
+  // Règles + prêt
+  mpRulesOverlay: $('mp-rules-overlay'),
+  mpReadyBtn:     $('mp-ready-btn'),
+  mpReadyList:    $('mp-ready-list'),
+  // Score inter-manche
+  mpRoundScoreOverlay: $('mp-round-score-overlay'),
+  mrsList:             $('mrs-list'),
+  mrsRound:            $('mrs-round'),
+  mrsCountdown:        $('mrs-countdown'),
   // Color reveal
   colorRevealOverlay: $('color-reveal-overlay'),
   revealSwatch:       $('reveal-swatch'),
   revealColorName:    $('reveal-color-name'),
   revealCountdown:    $('reveal-countdown'),
   // Overlays
-  startOverlay:        $('start-overlay'),
   mpWaitOverlay:       $('mp-wait-overlay'),
   mpWaitMsg:           $('mp-wait-msg'),
-  mpScoreWaitOverlay:  $('mp-score-wait-overlay'),
-  mpScorePhoto:        $('mp-score-photo'),
-  mpScoreWaitMsg:      $('mp-score-wait-msg'),
   scoreRevealOverlay:  $('score-reveal-overlay'),
   revealList:          $('reveal-list'),
   revealContinueBtn:   $('reveal-continue-btn'),
@@ -139,11 +143,11 @@ async function soloStartGame() {
     els.errorMsg.textContent = e?.name === 'NotAllowedError'
       ? 'Accès à la caméra refusé.'
       : "Impossible d'accéder à la caméra.";
-    hide(els.startOverlay);
+    hide(els.mpRulesOverlay);
     show(els.errorOverlay);
     return;
   }
-  hide(els.startOverlay);
+  hide(els.mpRulesOverlay);
   hide(els.errorOverlay);
   game.reset();
   els.hudTotal.textContent = String(game.totalRounds);
@@ -192,8 +196,19 @@ function soloNextRound() {
 }
 
 if (!isMP) {
-  els.startBtn.addEventListener('click', soloStartGame);
-  els.retryBtn.addEventListener('click', soloStartGame);
+  // Afficher directement les règles + bouton prêt (pas d'écran intermédiaire)
+  hide(els.mpReadyList);
+  show(els.mpRulesOverlay);
+
+  els.mpReadyBtn.addEventListener('click', soloStartGame);
+
+  els.retryBtn.addEventListener('click', () => {
+    hide(els.errorOverlay);
+    els.mpReadyBtn.disabled = false;
+    els.mpReadyBtn.textContent = 'Je suis prêt !';
+    show(els.mpRulesOverlay);
+  });
+
   els.nextBtn.addEventListener('click', soloNextRound);
   els.replayBtn.addEventListener('click', () => {
     hide(els.endOverlay);
@@ -208,17 +223,92 @@ if (!isMP) {
 // MULTI
 // =========================================================
 
-let mpWs            = null;
-let mpCameraReady   = false;
-let mpTargets       = [];
-let mpInternalRound = 0;
+let mpWs             = null;
+let mpCameraReady    = false;
+let mpTargets        = [];
+let mpInternalRound  = 0;
 let mpInternalScores = [];
-let mpPlayers       = [];
-let mpDoneThisRound = new Set();
-let mpCaptured      = false;
+let mpMyPhotos       = [];          // photos locales (petites, 100×100)
+let mpPlayersPhotos  = {};          // { [pid]: [photo1, ...] } des autres via relay
+let mpRoundScoresAll = {};          // { [pid]: score } de la manche en cours
+let mpReadySet       = new Set();   // pids qui ont cliqué Prêt
+let mpPlayers        = [];
+let mpDoneThisRound  = new Set();
+let mpCaptured       = false;
 
 function mpSend(payload) {
   if (mpWs && mpWs.readyState === WebSocket.OPEN) mpWs.send(JSON.stringify(payload));
+}
+
+// -- Capture petite photo (100×100, pour relay + inter-manche) --
+
+function captureSmallPhoto() {
+  const vw = camera.video.videoWidth;
+  const vh = camera.video.videoHeight;
+  if (!vw || !vh) return null;
+  const c = document.createElement('canvas');
+  c.width = 100; c.height = 100;
+  const side = Math.min(vw, vh);
+  c.getContext('2d').drawImage(camera.video, (vw - side) / 2, (vh - side) / 2, side, side, 0, 0, 100, 100);
+  return c.toDataURL('image/jpeg', 0.5);
+}
+
+// -- Règles / prêt --
+
+function mpUpdateReadyUI() {
+  if (!els.mpReadyList) return;
+  els.mpReadyList.innerHTML = '';
+  mpPlayers.forEach(p => {
+    const ready = mpReadySet.has(p.id);
+    const chip = document.createElement('div');
+    chip.className = 'mp-ready-chip';
+    chip.innerHTML = `<span class="mp-ready-icon">${ready ? '✅' : '⏳'}</span><span class="mp-rname">${escapeHtml(p.name.substring(0, 8))}</span>`;
+    els.mpReadyList.appendChild(chip);
+  });
+}
+
+function mpCheckAllReady() {
+  if (mpReadySet.size < mpPlayers.length) return;
+  hide(els.mpRulesOverlay);
+  mpStartInternalRound(0);
+}
+
+// -- Score inter-manche --
+
+function mpShowRoundScore(roundIdx, isLast, onDone) {
+  const sorted = [...mpPlayers].sort((a, b) => (mpRoundScoresAll[b.id] ?? 0) - (mpRoundScoresAll[a.id] ?? 0));
+  els.mrsRound.textContent = roundIdx + 1;
+  els.mrsList.innerHTML = '';
+  sorted.forEach(p => {
+    const isMe  = p.id === mpPlayerId;
+    const pts   = mpRoundScoresAll[p.id] ?? 0;
+    const photo = isMe
+      ? (mpMyPhotos[mpMyPhotos.length - 1] || null)
+      : ((mpPlayersPhotos[p.id] || [])[roundIdx] || null);
+    const photoEl = photo
+      ? `<img class="mrs-photo" src="${photo}" alt="">`
+      : `<div class="mrs-photo-ph"></div>`;
+    const entry = document.createElement('div');
+    entry.className = 'mrs-entry';
+    entry.innerHTML = `${photoEl}
+      <span class="mrs-name">${escapeHtml(p.name)}${isMe ? ' <span class="mrs-me">(toi)</span>' : ''}</span>
+      <span class="mrs-pts">+${pts} pts</span>`;
+    els.mrsList.appendChild(entry);
+  });
+  const label = isLast ? 'Résultats dans' : 'Manche suivante dans';
+  let secs = 5;
+  els.mrsCountdown.textContent = `${label} ${secs}…`;
+  show(els.mpRoundScoreOverlay);
+  const iv = setInterval(() => {
+    secs--;
+    if (secs <= 0) {
+      clearInterval(iv);
+      hide(els.mpRoundScoreOverlay);
+      onDone();
+    } else {
+      els.mrsCountdown.textContent = `${label} ${secs}…`;
+    }
+  }, 1000);
 }
 
 // -- Barre joueurs --
@@ -248,37 +338,6 @@ function mpResetDots() {
   els.playersBar.querySelectorAll('.player-dot').forEach(d => d.classList.remove('done'));
 }
 
-// -- Aperçu des 5 couleurs avant le début --
-
-function mpShowColorPreview(targets, onDone) {
-  els.previewSwatches.innerHTML = '';
-  targets.forEach((t, i) => {
-    const rgb   = hslToRgb(t.hue, t.sat, t.light);
-    const cname = colorName(t.hue, t.sat, t.light);
-    const chip  = document.createElement('div');
-    chip.className = 'preview-chip';
-    chip.innerHTML = `
-      <div class="pc-swatch" style="background:rgb(${rgb[0]},${rgb[1]},${rgb[2]})"></div>
-      <div class="pc-num">M${i + 1}</div>
-      <div class="pc-name">${escapeHtml(cname)}</div>
-    `;
-    els.previewSwatches.appendChild(chip);
-  });
-  show(els.colorPreviewOverlay);
-
-  let secs = 5;
-  els.previewSecs.textContent = secs;
-  const iv = setInterval(() => {
-    secs--;
-    els.previewSecs.textContent = secs;
-    if (secs <= 0) {
-      clearInterval(iv);
-      hide(els.colorPreviewOverlay);
-      onDone();
-    }
-  }, 1000);
-}
-
 // -- Reveal + countdown --
 
 function mpRunCountdown(steps, msEach, onDone) {
@@ -296,10 +355,10 @@ function mpRunCountdown(steps, msEach, onDone) {
 }
 
 function mpShowColorReveal(t, onDone) {
-  const rgb   = hslToRgb(t.hue, t.sat, t.light);
-  const cname = colorName(t.hue, t.sat, t.light);
+  const rgb   = hexToRgb(t.hex);
+  const cname = t.name;
 
-  els.colorRevealOverlay.style.background = `hsl(${t.hue}, ${t.sat * 100}%, ${t.light * 100}%)`;
+  els.colorRevealOverlay.style.background = t.hex;
   els.revealSwatch.style.background = rgbToCss(rgb);
   els.revealColorName.textContent   = cname;
   els.revealCountdown.innerHTML     = '';
@@ -334,8 +393,9 @@ async function mpEnsureCamera() {
 async function mpStartInternalRound(idx) {
   mpCaptured = false;
   mpDoneThisRound = new Set();
+  mpRoundScoresAll = {};
   mpResetDots();
-  hide(els.mpScoreWaitOverlay);
+  hide(els.mpCapturedBar);
 
   const t = mpTargets[idx];
   mpShowColorReveal(t, async (rgb, cname) => {
@@ -364,50 +424,50 @@ function mpDoCapture() {
   mpCaptured = true;
 
   const elapsed = elapsedSeconds();
-  stopTimer();
   hide(els.shutter);
   if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
 
   const rgb    = camera.sampleCenter() || [128, 128, 128];
   const result = game.evaluate(rgb, elapsed);
   mpInternalScores.push(result.points);
+  mpRoundScoresAll[mpPlayerId] = result.points;
 
-  // Photo dans l'overlay d'attente
-  camera.capturePhoto(els.mpScorePhoto);
-  els.mpScoreWaitMsg.textContent = `En attente des autres… (1/${mpPlayers.length})`;
-  show(els.mpScoreWaitOverlay);
+  const photo = captureSmallPhoto();
+  if (photo) mpMyPhotos.push(photo);
 
-  // Me marquer done
+  els.mpCapturedMsg.textContent = `📷 Photo prise — attente 1/${mpPlayers.length}`;
+  show(els.mpCapturedBar);
+
   mpSetPlayerDone(mpPlayerId);
   mpDoneThisRound.add(mpPlayerId);
 
-  // Relay avec numéro de round pour éviter les chevauchements
-  mpSend({ type: 'relay', data: { type: 'ch-done', round: mpInternalRound } });
-
+  mpSend({ type: 'relay', data: { type: 'ch-done', round: mpInternalRound, score: result.points, photo: photo || undefined } });
   mpCheckAllDone();
 }
 
 function mpCheckAllDone() {
-  els.mpScoreWaitMsg.textContent = `En attente des autres… (${mpDoneThisRound.size}/${mpPlayers.length})`;
+  els.mpCapturedMsg.textContent = `📷 Photo prise — attente ${mpDoneThisRound.size}/${mpPlayers.length}`;
   if (mpDoneThisRound.size < mpPlayers.length) return;
 
-  mpDoneThisRound = new Set(); // évite double-déclenchement
+  mpDoneThisRound = new Set();
+  stopTimer();
+  hide(els.mpCapturedBar);
+  hide(els.hud);
 
-  setTimeout(() => {
-    hide(els.mpScoreWaitOverlay);
-    const next = mpInternalRound + 1;
-    mpInternalRound = next;
+  const currentIdx = mpInternalRound;
+  const isLast     = (currentIdx + 1) >= mpTargets.length;
 
-    if (next >= mpTargets.length) {
-      // Tous les rounds internes finis → envoyer score au serveur
+  mpShowRoundScore(currentIdx, isLast, () => {
+    mpInternalRound = currentIdx + 1;
+    if (isLast) {
       const total = mpInternalScores.reduce((a, b) => a + b, 0);
-      mpSend({ type: 'game-score', score: total });
+      mpSend({ type: 'game-score', score: total, roundBreakdown: mpInternalScores });
       els.mpWaitMsg.textContent = 'Calcul des résultats…';
       show(els.mpWaitOverlay);
     } else {
-      mpStartInternalRound(next);
+      mpStartInternalRound(mpInternalRound);
     }
-  }, 600);
+  });
 }
 
 // -- Reveal progressif des scores --
@@ -416,26 +476,41 @@ const MEDALS = ['🥇', '🥈', '🥉'];
 
 function mpShowScoreReveal(msg) {
   hide(els.mpWaitOverlay);
-  hide(els.mpScoreWaitOverlay);
+  hide(els.mpCapturedBar);
   hide(els.playersBar);
   hide(els.hud);
 
-  const scores  = msg.roundScores || {};
-  const players = mpPlayers.length ? mpPlayers : (msg.players || []);
+  const scores     = msg.roundScores || {};
+  const breakdowns = msg.roundBreakdowns || {};
+  const players    = mpPlayers.length ? mpPlayers : (msg.players || []);
 
-  // Tri croissant : pire d'abord (révélé en 1er), meilleur en dernier (le winner)
-  const sorted = [...players].sort((a, b) => (scores[a.id] ?? 0) - (scores[b.id] ?? 0));
-  const total  = sorted.length;
+  // Tri décroissant : 1er en haut
+  const sorted = [...players].sort((a, b) => (scores[b.id] ?? 0) - (scores[a.id] ?? 0));
 
   els.revealList.innerHTML = '';
-  sorted.forEach((p, idxFromWorst) => {
-    const rankFromBest = total - 1 - idxFromWorst;
+  sorted.forEach((p, rank) => {
+    const isMe = p.id === mpPlayerId;
+    const pts  = scores[p.id] ?? 0;
+    const bd   = breakdowns[p.id] || null;
+
+    const bdHtml = bd && bd.length
+      ? `<div class="rp-breakdown">${bd.map((v, i) => `M${i + 1}: ${v}`).join(' · ')}</div>`
+      : '';
+
+    const photos = isMe ? mpMyPhotos : (mpPlayersPhotos[p.id] || []);
+    const photosHtml = photos.length
+      ? `<div class="rp-photos">${photos.map(src => `<img class="rp-photo-thumb" src="${src}" alt="">`).join('')}</div>`
+      : '';
+
     const entry = document.createElement('div');
-    entry.className = 'rp-entry' + (rankFromBest === 0 ? ' winner' : '');
+    entry.className = 'rp-entry' + (rank === 0 ? ' winner' : '');
     entry.innerHTML = `
-      <span class="rp-rank">${MEDALS[rankFromBest] ?? (rankFromBest + 1) + '.'}</span>
-      <span class="rp-name">${escapeHtml(p.name)}${p.id === mpPlayerId ? ' (toi)' : ''}</span>
-      <span class="rp-score">${scores[p.id] ?? 0} pts</span>
+      <div class="rp-header">
+        <span class="rp-rank">${MEDALS[rank] ?? (rank + 1) + '.'}</span>
+        <span class="rp-name">${escapeHtml(p.name)}${isMe ? ' <span class="rp-me">(toi)</span>' : ''}</span>
+        <span class="rp-score">${pts} pts</span>
+      </div>
+      ${bdHtml}${photosHtml}
     `;
     els.revealList.appendChild(entry);
   });
@@ -443,7 +518,7 @@ function mpShowScoreReveal(msg) {
   hide(els.revealContinueBtn);
   show(els.scoreRevealOverlay);
 
-  // Apparition progressive : pire en haut → winner en bas, 1 par 1
+  // Apparition progressive 1er → dernier
   const entries = els.revealList.querySelectorAll('.rp-entry');
   entries.forEach((entry, i) => {
     setTimeout(() => {
@@ -451,13 +526,15 @@ function mpShowScoreReveal(msg) {
       if (i === entries.length - 1) {
         setTimeout(() => show(els.revealContinueBtn), 900);
       }
-    }, 1000 + i * 1200);
+    }, 800 + i * 900);
   });
 
   els.revealContinueBtn.textContent = msg.hasMore ? 'Manche suivante →' : 'Retour au lobby →';
 }
 
 els.revealContinueBtn.addEventListener('click', () => {
+  mpMyPhotos = [];
+  mpPlayersPhotos = {};
   window.location.href = `/?room=${encodeURIComponent(mpRoomCode)}&pid=${encodeURIComponent(mpPlayerId)}`;
 });
 
@@ -475,21 +552,38 @@ function mpHandleMsg(msg) {
       break;
 
     case 'color-targets':
-      mpTargets = msg.targets;
-      mpPlayers = msg.players || [];
+      mpTargets        = msg.targets;
+      mpPlayers        = msg.players || [];
       mpInternalRound  = 0;
       mpInternalScores = [];
+      mpMyPhotos       = [];
+      mpPlayersPhotos  = {};
+      mpRoundScoresAll = {};
+      mpReadySet       = new Set();
       mpBuildPlayersBar(mpPlayers);
       hide(els.mpWaitOverlay);
-      // Aperçu des 5 couleurs pendant 5s, puis on commence
-      mpShowColorPreview(mpTargets, () => mpStartInternalRound(0));
+      // Afficher les règles, chaque joueur doit cliquer Prêt
+      mpUpdateReadyUI();
+      show(els.mpRulesOverlay);
       break;
 
     case 'relay':
-      if (msg.data && msg.data.type === 'ch-done' && msg.data.round === mpInternalRound) {
-        mpSetPlayerDone(msg.from);
-        mpDoneThisRound.add(msg.from);
-        mpCheckAllDone();
+      if (msg.data) {
+        const d = msg.data;
+        if (d.type === 'ch-ready') {
+          mpReadySet.add(msg.from);
+          mpUpdateReadyUI();
+          mpCheckAllReady();
+        } else if (d.type === 'ch-done' && d.round === mpInternalRound) {
+          mpSetPlayerDone(msg.from);
+          mpDoneThisRound.add(msg.from);
+          if (d.score !== undefined) mpRoundScoresAll[msg.from] = d.score;
+          if (d.photo) {
+            if (!mpPlayersPhotos[msg.from]) mpPlayersPhotos[msg.from] = [];
+            mpPlayersPhotos[msg.from].push(d.photo);
+          }
+          mpCheckAllDone();
+        }
       }
       break;
 
@@ -525,12 +619,19 @@ function mpConnect() {
 // ---- Init ----
 
 if (isMP) {
-  hide(els.startOverlay);
   show(els.mpWaitOverlay);
   els.mpWaitMsg.textContent = 'Connexion en cours…';
 
-  // SHUTTER : capture en mode MP
   els.shutter.addEventListener('click', mpDoCapture);
+
+  els.mpReadyBtn.addEventListener('click', () => {
+    els.mpReadyBtn.disabled = true;
+    els.mpReadyBtn.textContent = '✅ Prêt !';
+    mpReadySet.add(mpPlayerId);
+    mpUpdateReadyUI();
+    mpSend({ type: 'relay', data: { type: 'ch-ready' } });
+    mpCheckAllReady();
+  });
 
   els.retryBtn.addEventListener('click', () => {
     hide(els.errorOverlay);

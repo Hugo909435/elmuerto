@@ -129,42 +129,70 @@ export function rgbToCss([r, g, b]) {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-// A recognizable, findable target color: vivid hue, mid lightness.
-export function randomTarget() {
-  const hue = Math.floor(Math.random() * 360);
-  const sat = 0.55 + Math.random() * 0.4; // 55–95%
-  const light = 0.4 + Math.random() * 0.25; // 40–65%
-  const rgb = hslToRgb(hue, sat, light);
-  return { rgb, name: colorName(hue, sat, light) };
+export const COLOR_PALETTE = [
+  { name: 'Blanc',            hex: '#FFFFFF' },
+  { name: 'Noir',             hex: '#000000' },
+  { name: 'Gris Clair',       hex: '#D9D9D9' },
+  { name: 'Gris Foncé',       hex: '#555555' },
+  { name: 'Rouge',            hex: '#FF0000' },
+  { name: 'Rouge Bordeaux',   hex: '#7B1E3A' },
+  { name: 'Rouge Brique',     hex: '#B5533C' },
+  { name: 'Rose',             hex: '#FFC0CB' },
+  { name: 'Rose Fuchsia',     hex: '#FF4FA3' },
+  { name: 'Orange',           hex: '#FFA500' },
+  { name: 'Orange Brûlé',    hex: '#CC5500' },
+  { name: 'Jaune',            hex: '#FFFF00' },
+  { name: 'Jaune Moutarde',   hex: '#D4A017' },
+  { name: 'Beige',            hex: '#F5F5DC' },
+  { name: 'Crème',            hex: '#FFFDD0' },
+  { name: 'Marron',           hex: '#8B4513' },
+  { name: 'Marron Chocolat',  hex: '#5A3825' },
+  { name: 'Taupe',            hex: '#8B7D6B' },
+  { name: 'Bleu Ciel',        hex: '#90D5FF' },
+  { name: 'Bleu Foncé',       hex: '#111184' },
+  { name: 'Bleu Marine',      hex: '#001F54' },
+  { name: 'Bleu Turquoise',   hex: '#40E0D0' },
+  { name: 'Bleu Pétrole',    hex: '#1F6F78' },
+  { name: 'Vert',             hex: '#00A651' },
+  { name: 'Vert Clair',       hex: '#90EE90' },
+  { name: 'Vert Foncé',       hex: '#1E5631' },
+  { name: 'Vert Olive',       hex: '#708238' },
+  { name: 'Vert Menthe',      hex: '#98FF98' },
+  { name: 'Vert Kaki',        hex: '#8F9779' },
+  { name: 'Violet',           hex: '#8000FF' },
+  { name: 'Violet Lavande',   hex: '#B57EDC' },
+  { name: 'Lilas',            hex: '#C8A2C8' },
+  { name: 'Mauve',            hex: '#A060A0' },
+  { name: 'Cyan',             hex: '#00FFFF' },
+  { name: 'Aqua',             hex: '#7FFFD4' },
+  { name: 'Turquoise Clair',  hex: '#AFEEEE' },
+  { name: 'Corail',           hex: '#FF7F50' },
+  { name: 'Saumon',           hex: '#FA8072' },
+  { name: 'Pêche',           hex: '#FFDAB9' },
+  { name: 'Or',               hex: '#D4AF37' },
+  { name: 'Argent',           hex: '#C0C0C0' },
+  { name: 'Bronze',           hex: '#CD7F32' },
+  { name: 'Ivoire',           hex: '#FFFFF0' },
+  { name: 'Bordeaux Sombre',  hex: '#5E0B15' },
+  { name: 'Prune',            hex: '#701C3A' },
+  { name: 'Terracotta',       hex: '#C96A4A' },
+  { name: 'Sable',            hex: '#CDB79E' },
+  { name: 'Ardoise',          hex: '#708090' },
+  { name: 'Indigo',           hex: '#4B0082' },
+  { name: 'Anis',             hex: '#DFFF00' },
+];
+
+export function hexToRgb(hex) {
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
 }
 
-// Rough French name from hue/saturation/lightness — just for flavor.
-export function colorName(hue, sat, light) {
-  if (sat < 0.18) {
-    if (light < 0.25) return 'noir';
-    if (light > 0.8) return 'blanc';
-    return 'gris';
-  }
-  const names = [
-    [15, 'rouge'],
-    [45, 'orange'],
-    [70, 'jaune'],
-    [160, 'vert'],
-    [200, 'cyan'],
-    [255, 'bleu'],
-    [290, 'violet'],
-    [330, 'rose'],
-    [360, 'rouge'],
-  ];
-  let base = 'rouge';
-  for (const [max, n] of names) {
-    if (hue <= max) {
-      base = n;
-      break;
-    }
-  }
-  const prefix = light > 0.62 ? 'clair ' : light < 0.45 ? 'foncé ' : '';
-  return (base + (prefix ? ' ' + prefix.trim() : '')).trim();
+export function randomTarget() {
+  const entry = COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)];
+  return { rgb: hexToRgb(entry.hex), name: entry.name };
 }
 
 // Map a CIEDE2000 difference to a 0–100 score and a rating label.
